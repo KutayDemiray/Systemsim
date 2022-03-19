@@ -50,8 +50,8 @@ void enqueue(pcb_queue *queue, pcb *item) {
 }
 
 // dequeue mode
-#define FIFO 0
-#define SJF 1
+#define FIFO 1
+#define SJF 2
 
 pcb *dequeue(pcb_queue *queue, int mode) {
 	if (queue->count == 0) {
@@ -79,5 +79,29 @@ pcb *dequeue(pcb_queue *queue, int mode) {
 // by default, use FIFO for dequeue
 pcb *dequeue(pcb_queue *queue) {
 	return dequeue(queue, FIFO);
+}
+
+// ready queue
+typedef struct {
+	pthread_cond_t cv;
+	int mode;
+	pcb_queue queue;
+} ready_queue;
+
+void ready_queue_init(ready_queue *rq, int mode) {
+	pthread_cond_init(&rq->cv, NULL);
+	rq->mode = mode; // SJF or FIFO
+}
+
+int enqueue(ready_queue *rq, pcb *pcb) {
+	if (pcb->state != READY) {
+		return -1; // "ready" queue should only have ready processes
+	}
+	enqueue(&(rq->queue), pcb);
+	return 0;
+}
+
+pcb *dequeue(ready_queue *rq) {
+	return dequeue(&(rq->queue), rq->mode);
 }
 
