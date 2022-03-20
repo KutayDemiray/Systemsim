@@ -8,17 +8,26 @@
 #include <pthread.h>
 
 // process state enum
-#define RUNNING 1
-#define WAITING 2
-#define READY 3
+#define PCB_RUNNING 1
+#define PCB_WAITING 2
+#define PCB_READY 3
 
 typedef struct {
 	int p_id;
 	int state;
-	int thread_id;
+	pthread_t t_id;
 	int next_burst_len;
 	int total_time; 
 } pcb;
+
+pcb *pcb_create(int p_id, int state, pthread_t t_id, int next_burst_len, int total_time) {
+	pcb *newpcb = malloc(sizeof(pcb));
+	newpcb->p_id = p_id;
+	newpcb->state = state;
+	newpcb->t_id = t_id;
+	newpcb->next_burst_len = next_burst_len;
+	newpcb->total_time = total_time;
+}
 
 typedef struct {
 	pcb *item;
@@ -47,38 +56,41 @@ void enqueue(pcb_queue *queue, pcb *item) {
 	}
 	
 	queue->tail = tmp;
+	queue->count++;
 }
 
 // dequeue mode
-#define FIFO 1
-#define SJF 2
+#define MODE_FIFO 1
+#define MODE_PRIO 2
 
 pcb *dequeue(pcb_queue *queue, int mode) {
 	if (queue->count == 0) {
 		return NULL;
 	}
-	else if (mode == FIFO) {
+	else if (mode == MODE_FIFO) {
 		pcb *rv = queue->tail->item;
 		pcb_node *tmp = queue->tail; 
 		queue->tail = queue->tail->prev;
 		queue->tail->next = NULL;
 		free(tmp);
+		queue->count--;
 		return rv;
 	}
-	else if (mode == SJF) {
+	else if (mode == MODE_PRIO) {
 		pcb *rv = queue->head->item;
-		pcb_node *tmp;
-		for (tmp = queue->head; tmp != NULL; tmp = tmp->next) {
-			if (tmp->item->next_burst_len < rv->next_burst_len) {
-				rv = tmp->item;
+		pcb_node *cur, *tmp;
+		for (cur = queue->head; cur != NULL; cur = tmp->next) {
+			if (cur->item->next_burst_len < rv->next_burst_len) {
+				tmp = cur;
+				rv = cur->item;
 			}
 		}
+		free(tmp);
+		queue->count--;
 	}
-}
-
-// by default, use FIFO for dequeue
-pcb *dequeue(pcb_queue *queue) {
-	return dequeue(queue, FIFO);
+	else {
+		return NULL;
+	}
 }
 
 // ready queue
@@ -88,13 +100,14 @@ typedef struct {
 	pcb_queue queue;
 } ready_queue;
 
-void ready_queue_init(ready_queue *rq, int mode) {
-	pthread_cond_init(&rq->cv, NULL);
-	rq->mode = mode; // SJF or FIFO
+void ready_queue_init(ready_queue **rq, int alg) {
+	*rq = malloc(sizeof(ready_queue));
+	pthread_cond_init(&(*rq)->cv), NULL);
+	(*rq)->mode = alg == ALG_SJF ? MODE_PRIO : MODE_FIFO; // PRIO or FIFO
 }
 
 int enqueue(ready_queue *rq, pcb *pcb) {
-	if (pcb->state != READY) {
+	if (pcb->state != PCB_READY) {
 		return -1; // "ready" queue should only have ready processes
 	}
 	enqueue(&(rq->queue), pcb);

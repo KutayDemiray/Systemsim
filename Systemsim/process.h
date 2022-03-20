@@ -13,7 +13,7 @@ typedef struct {
 } process_arg;
 
 // simulated process as a thread
-static void *process(void *arg) {
+static void *process(void *args) {
 
 }
 

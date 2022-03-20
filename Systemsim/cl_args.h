@@ -1,7 +1,7 @@
 // algorithm types
-#define FCFS 1
-#define SJF 2
-#define RR 3
+#define ALG_FCFS 1
+#define ALG_SJF 2
+#define ALG_RR 3
 
 #define INF -1 // infinity
 
@@ -38,10 +38,10 @@ typedef struct {
 	double p2; // probability that a running thread will go for i/o with device 2
 	double pg; // probability that a new thread is generated
 	int max_p; // maximum number of processes that can exist simultaneously
-	int all_p; // number of process threads that will be created before simulation ends
-	int outmode;
+	int all_p; // total number of process threads that will be created before simulation ends
+	int outmode; // output mode
 } cl_args;
 
-cl_args *process_args(int argc, char **argv) {
+void process_args(cl_args *cl, int argc, char **argv) {
 	// process args
 }
