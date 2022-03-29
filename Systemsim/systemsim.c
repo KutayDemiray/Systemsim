@@ -9,7 +9,11 @@ cpu cpu;
 io_device dev1;
 io_device dev2;
 
-sem_t *sem_mutex_sim; // mutex for process generator and cpu scheduler threads
+// mutex for process generator and cpu scheduler threads
+// controls access to system resources (cpu, i/o devices etc.)
+sem_t *sem_mutex_sim;
+
+
 sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
 sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
 

@@ -17,7 +17,7 @@ typedef struct {
 	int state;
 	pthread_t t_id;
 	int next_burst_len;
-	int total_time; 
+	int total_time;
 } pcb;
 
 pcb *pcb_create(int p_id, int state, pthread_t t_id, int next_burst_len, int total_time) {
