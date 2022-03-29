@@ -10,7 +10,12 @@ sem_t *sem_mutex_sim; // mutex for process generator thread
 sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
 sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
 
-// process generator thread
+pthread_cond_t cv_sch; // scheduler cv
+
+pthread_thread_t pgen; // process generator
+pthread_thread_t sched; // scheduler
+
+// process generator thread (only one will be created)
 void *process_generator(void *args) {
 	// create initial process threads
 	int total = 0;
@@ -58,11 +63,41 @@ void *process_generator(void *args) {
 		sem_getvalue(sem_fullprocs, &cur);
 	}
 	
+	pthread_exit(NULL);
 }
 
-// cpu scheduler thread
+// cpu scheduler thread (only one will be created)
 void *cpu_scheduler(void *args) {
+	// should keep running until ready queue is empty and no more processes will arrive (process_generator is terminated)
+	while (pthread_tryjoin_np(pgen, NULL) != 0 && cpu->rq->count > 0) {
+		// while not running, sleep on cv
+		// scheduler woken up when:
+			// TODO the running thread terminates
+			// TODO the running thread starts i/o
+			// TODO time quantum for running thread expires (RR)
+			// TODO a process returns from i/o and is added to the ready queue
+			// TODO a new process is created and is added to the ready queue
+		
+		while (cpu->cur != NULL) { // TODO other conds?
+			pthread_cond_wait(&cv_sch);
+		}
+		
+		// when waken up
+		
+		// TODO check if scheduling needed
+		
+		// if so, select process from ready queue
+		cpu->cur = dequeue(&(cpu->rq));
+		
+		// wake up all processes (including selected) with broadcast
+		pthread_cond_broadcast(&cv_sch);
+			
+		// TODO all processes check whether they're selected. if not, sleep again (this part may be done in process thread instead of here)
+		
+		// selected thread enters the cpu (TODO maybe already done above?)
+	}
 	
+	pthread_exit(NULL);
 }
 
 void sim_init() {
@@ -75,8 +110,13 @@ void sim_init() {
 	sem_fullprocs = sem_open(SEMNAME_FULLPROCS, O_RDWR | O_CREAT, 0660, 0);
 	sem_emptyprocs = sem_open(SEMNAME_EMPTYPROCS, O_RDWR | O_CREAT, 0660, cl.max_p);
 	
+	// conditional variables
+	pthread_cond_init(&cv_sch, NULL);
+	
 	// cpu struct
-	ready_queue_init(&(cpu->rq), cl.alg);
+	cpu_init(&cpu);
+	
+	// simulator threads
 }
 
 int main(int argc, char **argv) {

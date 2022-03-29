@@ -6,4 +6,10 @@
 
 typedef struct {
 	ready_queue rq;
+	pcb *cur;
 } cpu;
+
+void cpu_init(cpu *cpu, int alg) {
+	ready_queue_init(&(cpu->rq), cl_alg);
+	*cur = NULL;
+}
