@@ -151,7 +151,7 @@ void sim_end() {
 
 int main(int argc, char **argv) {
 	// init
-	process_args(&cl, argc, argv);
+	read_args(&cl, argc, argv);
 	sim_init();
 	
 	sim_begin(); // start simulation threads
