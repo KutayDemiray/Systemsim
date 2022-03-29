@@ -3,7 +3,7 @@
 #define ALG_SJF 2
 #define ALG_RR 3
 
-#define INF -1 // infinity
+#define INF 9999999 // infinity
 
 // device service time bounds
 #define D1_MIN_SERVICE_TIME 30
