@@ -11,5 +11,13 @@ typedef struct {
 
 void cpu_init(cpu *cpu, int alg) {
 	ready_queue_init(&(cpu->rq), cl_alg);
-	*cur = NULL;
+	(*cpu)->cur = NULL;
+}
+
+typedef struct {
+	pthread_cond_t cv;
+} io_device;
+
+void io_device_init(io_device *dev) {
+	pthread_cond_init(&(dev->cv));
 }

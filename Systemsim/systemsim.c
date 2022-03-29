@@ -2,11 +2,14 @@
 #include "process.h"
 #include "system.h"
 
-cl_args cl;
+cl_args cl; // command line args
 
 cpu cpu;
 
-sem_t *sem_mutex_sim; // mutex for process generator thread
+io_device dev1;
+io_device dev2;
+
+sem_t *sem_mutex_sim; // mutex for process generator and cpu scheduler threads
 sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
 sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
 
@@ -18,8 +21,8 @@ pthread_thread_t sched; // scheduler
 // process generator thread (only one will be created)
 void *process_generator(void *args) {
 	// create initial process threads
-	int total = 0;
-	for (; total < INITIAL_PROCESSES; ++total) {
+	int total;
+	for (total = 0; total < INITIAL_PROCESSES; ++total) {
 		// generate process
 	}
 	int cur;
@@ -39,11 +42,13 @@ void *process_generator(void *args) {
 		// generate process
 		if (total < cl.all_p && (double) rand() / (double) RAND_MAX < cl.pg) {
 			// 1. wait until less than max_p processes exist in the system
-			wait(sem_emptyprocs);
-			wait(sem_mutex_sim);
+			sem_wait(sem_emptyprocs);
+			sem_wait(sem_mutex_sim);
 			
 			// 2. create process thread
-			n = pthread_create(&tid, NULL, process_th, (void *) process_args);
+			process_arg pargs;
+			// TODO fill args as needed
+			n = pthread_create(&tid, NULL, process_th, (void *) pargs);
 			if (n != 0) {
 				printf("[ERROR] process_generator failed to create thread\n");
 				exit(1);
@@ -56,8 +61,11 @@ void *process_generator(void *args) {
 			enqueue(&rq, newpcb);
 			total++;
 			
-			signal(sem_mutex_sim);
-			signal(sem_fullprocs);
+			// 5. alert scheduler (case 5)
+			pthread_cond_signal(&cv_sch);
+			
+			sem_post(sem_mutex_sim);
+			sem_post(sem_fullprocs);
 		}
 		
 		sem_getvalue(sem_fullprocs, &cur);
@@ -70,13 +78,16 @@ void *process_generator(void *args) {
 void *cpu_scheduler(void *args) {
 	// should keep running until ready queue is empty and no more processes will arrive (process_generator is terminated)
 	while (pthread_tryjoin_np(pgen, NULL) != 0 && cpu->rq->count > 0) {
+		sem_wait(sem_mutex_sim);
+	
 		// while not running, sleep on cv
 		// scheduler woken up when:
-			// TODO the running thread terminates
-			// TODO the running thread starts i/o
-			// TODO time quantum for running thread expires (RR)
-			// TODO a process returns from i/o and is added to the ready queue
-			// TODO a new process is created and is added to the ready queue
+			// TODO 1. the running thread terminates
+			// TODO 2. the running thread starts i/o
+			// TODO 3. time quantum for running thread expires (RR)
+			// TODO 4. a process returns from i/o and is added to the ready queue
+			// TODO 5. a new process is created and is added to the ready queue
+		// signals for above cases are sent from elsewhere
 		
 		while (cpu->cur != NULL) { // TODO other conds?
 			pthread_cond_wait(&cv_sch);
@@ -92,9 +103,11 @@ void *cpu_scheduler(void *args) {
 		// wake up all processes (including selected) with broadcast
 		pthread_cond_broadcast(&cv_sch);
 			
-		// TODO all processes check whether they're selected. if not, sleep again (this part may be done in process thread instead of here)
+		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
 		
 		// selected thread enters the cpu (TODO maybe already done above?)
+		
+		sem_signal(sem_mutex_sim);
 	}
 	
 	pthread_exit(NULL);
@@ -113,10 +126,23 @@ void sim_init() {
 	// conditional variables
 	pthread_cond_init(&cv_sch, NULL);
 	
-	// cpu struct
+	// hardware structs
 	cpu_init(&cpu);
-	
+	io_device_init(&dev1);
+	io_device_init(&dev2);
+}
+
+void sim_begin() {
 	// simulator threads
+	pthread_create(&pgen, NULL, process_generator, NULL);
+	pthread_create(&sched, NULL, cpu_scheduler, NULL);
+}
+
+void sim_end() {
+	pthread_join(pgen, NULL); // TODO return may not be null (so that info can be carried etc.)
+	pthread_join(sched, NULL);
+	
+	// TODO print info (details depend on console args)
 }
 
 int main(int argc, char **argv) {
@@ -124,7 +150,9 @@ int main(int argc, char **argv) {
 	process_args(&cl, argc, argv);
 	sim_init();
 	
+	sim_begin(); // start simulation threads
 	// simulate stuff
+	sim_end(); // print information to console too
 	
 	return 0;
 }

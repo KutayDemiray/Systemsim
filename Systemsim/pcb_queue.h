@@ -79,12 +79,14 @@ pcb *dequeue(pcb_queue *queue, int mode) {
 	else if (mode == MODE_PRIO) {
 		pcb *rv = queue->head->item;
 		pcb_node *cur, *tmp;
+		
 		for (cur = queue->head; cur != NULL; cur = tmp->next) {
 			if (cur->item->next_burst_len < rv->next_burst_len) {
 				tmp = cur;
 				rv = cur->item;
 			}
 		}
+		
 		free(tmp);
 		queue->count--;
 	}

@@ -10,14 +10,18 @@
 
 typedef struct {
 	// TODO possibly a pointer to the current process in the cpu
+	// TODO also need to access scheduler cv
 } process_arg;
 
-// simulated process as a thread
+// simulated process as a thread (there may be many)
 static void *process_th(void *args) {
-	// TODO
+	// TODO wait until cpu scheduler wakes all processes up
 	
 	// TODO cpu scheduler wakes up all processes when it picks one to run
 	// so all processes should check whether they're the ready process or not when they run
 	
+	// TODO wake up scheduler
+	
+	pthread_exit(NULL);
 }
 
