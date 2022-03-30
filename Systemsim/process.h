@@ -20,12 +20,15 @@ typedef struct {
 
 // simulated process as a thread (there may be many) TODO work in progress
 static void *process_th(void *args) {
+	
+	pthread_cond_wait(&cv_sch, &sem_mutex_sim); //before accessing the shared data
 	// read args
 	cpu *cpu = ((process_arg) args)->cpu;
 	pcb *pcb = ((process_arg) args)->pcb;
 	pthread_cond_t *cv_sch = ((process_arg) args)->cv_sch;
 	pthread_cond_t *cv_rq = ((process_arg) args)->cv_rq;
 	sem_t *sem_mutex_sim = ((process_arg) args)->sem_mutex_sim;
+	cl_args* cl = ((process_arg) args)->cl;
 	
 	time_t t;
 	srand((unsigned) time(&t));
@@ -46,21 +49,26 @@ static void *process_th(void *args) {
 		int tmp = rand();
 		p = ((double) (tmp % 1000)) / 1000.0;
 		
+		
 		// determine next cpu burst length
-		if (calcburst && cl->burst-dist != FIXED) {
+		int burstwidth = cl->max_burst - cl->min_burst;
+		if (calcburst && cl->burst_dist != FIXED) {
 			double u, next;
 			if (cl->burst_dist == UNIFORM) {
 				u = ((double) (rand() % 1000)) / 1000.0;
-				next = (int) (burstlen * u);
+				next = (int) (burstwidth * u);
 			}
-			else if (cl->burst_dist == EXPONENTIAL {
-				next = -1;
-				while (next < min_burst || next > max_burst) {
-					double u = ((double) (rand() % 1000)) / 1000.0;
-					next = (int) ((-1) * log(u) * burstlen);
-				}
+			else if (cl->burst_dist == EXPONENTIAL) {
+				do {
+					u = ((double) (rand() % 1000)) / 1000.0;
+					next = (int) ((-1) * log(u) * burstwidth);
+				} while (next < cl->min_burst || next > cl->max_burst)
 			}
-			// otherwise burst dist is fixed, no need to change anything
+			else {
+				next = cl->burst_len; // we need to do this in order to initialize the burst length
+			}
+
+			pcb->next_burst_len = next;
 		}
 		
 		// "do" the burst by sleeping
@@ -68,19 +76,21 @@ static void *process_th(void *args) {
 			pcb->next_burst_len -= q;
 			calcburst = 0;
 			usleep(cl->q);
-			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
+			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again ASK
 		}
+
 		else {
+			calcburst = 0;
 			usleep(pcb->next_burst_len);
-			calcburst = 1;
+			calcburst = 1; //??????
 			
 			// deal with i/o if needed
-			if (p > p0) {
+			if (p > cl->p0) {
 				io_device *dev;
-				if (p0 <= p && p < p0 + p1) { // i/o with device 1
+				if (cl->p0 <= p && p < cl->p0 + cl->p1) { // i/o with device 1
 					dev = dev1;
 				}
-				else if (p0 + p1 <= p) { // i/o with device 2
+				else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
 					dev = dev2;
 				}
 				
@@ -90,12 +100,12 @@ static void *process_th(void *args) {
 		}
 		
 		// if the process won't be terminated, put it back on the queue
-		if (p > p0) {
+		if (p > cl->p0) {
 			enqueue(&(cpu->rq), pcb);
 		}
 		
 		sem_post(sem_mutex_sim);
-	} while (p > p0);
+	} while (p > cl->p0);
 	
 	// TODO more termination handling?
 	
