@@ -16,7 +16,6 @@ io_device dev2;
 // controls access to many resources (cpu, i/o devices etc., essentially most global variables in this file)
 pthread_mutex_t *mutex_sim;
 
-
 sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
 sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
 
@@ -24,6 +23,8 @@ pthread_cond_t *cv_sch; // scheduler cv
 
 pthread_thread_t pgen; // process generator
 pthread_thread_t sched; // scheduler
+
+pid_list *pid_list; // tracks available pid's
 
 // process generator thread (only one will be created)
 void *process_generator(void *args) {
@@ -140,6 +141,9 @@ void sim_init() {
 	cpu_init(&cpu);
 	io_device_init(&dev1);
 	io_device_init(&dev2);
+	
+	// pid_list
+	pid_list_init(&pid_list, cl->max_p);
 }
 
 void sim_begin() {
@@ -155,6 +159,9 @@ void sim_end() {
 	pthread_join(sched, NULL);
 	
 	// TODO print info (details depend on console args)
+	
+	// frees
+	pid_list_delete(&pid_list);
 }
 
 int main(int argc, char **argv) {
