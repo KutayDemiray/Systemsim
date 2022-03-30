@@ -28,8 +28,16 @@ pid_list *pid_list; // tracks available pid's
 
 // process generator thread (only one will be created)
 void *process_generator(void *args) {
-	// create initial process threads
+	// numeric variables
 	int total;
+	int n;
+
+	// timings
+	time_t t;
+	srand((unsigned) time(&t));
+	
+	// argumental variables for process creations
+	pthread_t tid;
 	process_arg pargs;
 	pargs.cl = &cl;
 	pargs.cpu = &cpu;
@@ -38,48 +46,57 @@ void *process_generator(void *args) {
 	pargs.cv_sch = cv_sch;
 	pargs.cv_rq = cv_rq;
 	pargs.mutex_sim = mutex_sim;
+	pargs.pid_list = pid_list;
 
+	// initial generation loop
 	for (total = 0; total < INITIAL_PROCESSES; ++total) {
 		// generate initial process
 		// 1. wait until less than max_p processes exist in the system
-			sem_wait(sem_emptyprocs);
-			pthread_mutex_lock(mutex_sim);
-			
-			// 3. create PCB for new process
-			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
-			
-			// 4. add new process to ready queue
-			enqueue(&rq, newpcb);
-			total++;
+		sem_wait(sem_emptyprocs);
+		pthread_mutex_lock(mutex_sim);
+		
+		// 3. create PCB for new process
+		pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
+		
+		// 4. add new process to ready queue
+		enqueue(&rq, newpcb);
+		total++;
 
-			// 2. initialize process thread
-			pargs.pcb = newpcb;
-			
-			// TODO fill args as needed
-			n = pthread_create(&tid, NULL, process_th, (void *) pargs);
-			if (n != 0) {
-				printf("[ERROR] process_generator failed to create thread\n");
-				exit(1);
-			}
-			
-			// 5. alert scheduler (case 5)
-			pthread_cond_signal(cv_sch);
+		// 2. initialize process thread
+		pargs.pcb = newpcb;
+		
+		// TODO fill args as needed
+		n = pthread_create(&tid, NULL, process_th, (void *) pargs);
+		if (n != 0) {
+			printf("[ERROR] process_generator failed to create thread\n");
+			exit(1);
+		}
 
-			pthread_mutex_unlock(mutex_sim);
-			sem_post(sem_fullprocs); 
+		
+		// 5. alert scheduler (case 5)
+		pthread_cond_signal(cv_sch);
+
+		pthread_mutex_unlock(mutex_sim);
+		sem_post(sem_fullprocs); 
 	}
 
 	int cur;
 	sem_getvalue(sem_fullprocs, &cur);
 	
-	// set up rng
-	time_t t;
-	srand((unsigned) time(&t));
-	
 	// process generation loop
-	int n;
-	pthread_t tid;
 	while (total < cl.all_p || cur != 0) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
+		if (cl.outmode == 2){
+			pcb* tmp = getPcb(gettid());
+			printf("%u \t %", (unsigned int) (gettimeofday(&t, NULL) - start_time));
+			printf(tmp->pid);
+			printf("\t");
+			case(tmp->state)
+				1: printf("RUNNING");
+				2: printf("WAITING");
+				3: printf("READY");
+			printf("\n");
+		}
+		
 		// sleep for 5 ms
 		usleep(5);
 		
@@ -90,7 +107,7 @@ void *process_generator(void *args) {
 			pthread_mutex_lock(mutex_sim);
 			
 			// 2. create PCB for new process
-			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
+			newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
 			
 			// 3. add new process to ready queue
 			enqueue(&rq, newpcb);

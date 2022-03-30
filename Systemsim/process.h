@@ -74,15 +74,24 @@ static void *process_th(void *args) {
 			pcb->state = PCB_RUNNING;
 			pcb->remaining_burst_len -= q;
 			calcburst = 0;
+			if (cl->outmode == 2){
+				printf(); // I NEED HELP THERE HOW TO CHECK THE CURRENT TIME 
+				printf("\t");
+				printf(pcb->p_id);
+				printf("\t");
+				printf(pcb->state);
+				printf("\n");
+			}
 			usleep(cl->q);
 			pcb->state = PCB_READY;
+			
 			pthread_cond_signal(cv_sch); // wake up scheduler (case 3)
 			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
 		}
 		else {
 			usleep(pcb->remaining_burst_len);
 			calcburst = 1;
-			
+			int device_no = 0;
 			// deal with i/o if needed
 			if (p > cl->p0) {
 				io_device *dev;
@@ -92,11 +101,13 @@ static void *process_th(void *args) {
 					dev = dev1;
 					duration = cl->t1;
 					dev_lock = dev1_lock;
+					device_no = 1;
 				}
 				else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
 					dev = dev2;
 					duration = cl->t2;
 					dev_lock = dev2_lock;
+					device_no = 2;
 				}
 				
 				pcb->state = PCB_WAITING;
@@ -112,7 +123,15 @@ static void *process_th(void *args) {
 				dev->cur = pcb;
 				
 				//pthread_mutex_unlock(dev->mutex);
-				
+				if (cl->outmode == 2){
+					printf(); // I NEED HELP THERE HOW TO CHECK THE CURRENT TIME 
+					printf("\t");
+					printf(pcb->p_id);
+					printf("\t");
+					printf("USING DEVICE %d", device_no);
+					printf("\n");
+				}
+
 				usleep(duration);
 				
 				//pthread_mutex_lock(dev->mutex);
