@@ -30,9 +30,45 @@ pid_list *pid_list; // tracks available pid's
 void *process_generator(void *args) {
 	// create initial process threads
 	int total;
+	process_arg pargs;
+	pargs.cl = &cl;
+	pargs.cpu = &cpu;
+	pargs.dev1 = &dev1;
+	pargs.dev2 = &dev2;
+	pargs.cv_sch = cv_sch;
+	pargs.cv_rq = cv_rq;
+	pargs.mutex_sim = mutex_sim;
+
 	for (total = 0; total < INITIAL_PROCESSES; ++total) {
-		// generate process
+		// generate initial process
+		// 1. wait until less than max_p processes exist in the system
+			sem_wait(sem_emptyprocs);
+			pthread_mutex_lock(mutex_sim);
+			
+			// 3. create PCB for new process
+			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
+			
+			// 4. add new process to ready queue
+			enqueue(&rq, newpcb);
+			total++;
+
+			// 2. initialize process thread
+			pargs.pcb = newpcb;
+			
+			// TODO fill args as needed
+			n = pthread_create(&tid, NULL, process_th, (void *) pargs);
+			if (n != 0) {
+				printf("[ERROR] process_generator failed to create thread\n");
+				exit(1);
+			}
+			
+			// 5. alert scheduler (case 5)
+			pthread_cond_signal(cv_sch);
+
+			pthread_mutex_unlock(mutex_sim);
+			sem_post(sem_fullprocs); 
 	}
+
 	int cur;
 	sem_getvalue(sem_fullprocs, &cur);
 	
@@ -53,21 +89,22 @@ void *process_generator(void *args) {
 			sem_wait(sem_emptyprocs);
 			pthread_mutex_lock(mutex_sim);
 			
-			// 2. create process thread
-			process_arg pargs;
-			// TODO fill args as needed
+			// 2. create PCB for new process
+			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
+			
+			// 3. add new process to ready queue
+			enqueue(&rq, newpcb);
+			total++;
+
+			// 4. create process thread
+			// process_arg pargs; // done in the start of this method
+			pargs.pcb = newpcb;
+			
 			n = pthread_create(&tid, NULL, process_th, (void *) pargs);
 			if (n != 0) {
 				printf("[ERROR] process_generator failed to create thread\n");
 				exit(1);
 			}
-			
-			// 3. create PCB for new process
-			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
-			
-			// 4. add new process to ready queue
-			enqueue(&rq, newpcb);
-			total++;
 			
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(cv_sch);
