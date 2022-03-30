@@ -14,9 +14,8 @@ typedef struct {
 	io_device *dev1, *dev2; // shared
 	pcb *pcb; // shared
 	pthread_cond_t *cv_sch; // shared
-	pthread_cond_t *cv_rq; // shared
 	pthread_mutex_t *mutex_sim; // shared
-	pid_list *pid_list; // shared
+	pid_list **pid_list; // shared
 } process_arg;
 
 // simulated process as a thread (there may be many) TODO work in progress
@@ -25,7 +24,7 @@ static void *process_th(void *args) {
 	cpu *cpu = ((process_arg) args)->cpu;
 	pcb *pcb = ((process_arg) args)->pcb;
 	pthread_cond_t *cv_sch = ((process_arg) args)->cv_sch;
-	pthread_cond_t *cv_rq = ((process_arg) args)->cv_rq;
+	pthread_cond_t *cv_rq = ((process_arg) args)->cpu->rq->cv;
 	pthread_mutex_t *mutex_sim = ((process_arg) args)->mutex_sim;
 	cl_args* cl = ((process_arg) args)->cl;
 	
@@ -50,20 +49,22 @@ static void *process_th(void *args) {
 		
 		// determine next cpu burst length
 		int burstwidth = cl->max_burst - cl->min_burst;
-		if (calcburst && cl->burst_dist != FIXED) {
+		if (pcb->remaining_burst_time == 0 && cl->burst_dist != FIXED) {
 			double u, next;
 			if (cl->burst_dist == UNIFORM) {
 				u = ((double) (rand() % 1000)) / 1000.0;
 				next = (int) (burstwidth * u);
 			}
-			else if (cl->burst_dist == EXPONENTIAL) { // algorithm below is taken from prof. korpeoglu's forum post
+			else if (cl->burst_dist == EXPONENTIAL) { // exponential distribution
+				// algorithm below is taken from prof. korpeoglu's forum post
+				// exponential distribution with lambda = 1/burst_len
 				do {
 					u = ((double) (rand() % 1000)) / 1000.0;
 					next = (int) ((-1) * log(u) * cl->burst_len);
 				} while (next < cl->min_burst || next > cl->max_burst)
 			}
-			else {
-				next = cl->burst_len; // we need to do this in order to initialize the burst length
+			else { // fixed
+				next = cl->burst_len;
 			}
 
 			pcb->next_burst_len = next;
@@ -72,31 +73,36 @@ static void *process_th(void *args) {
 		// "do" the burst by sleeping
 		if (cl->alg == ALG_RR && cl->q < pcb->remaining_burst_len) {
 			pcb->state = PCB_RUNNING;
-			pcb->remaining_burst_len -= q;
-			calcburst = 0;
-			if (cl->outmode == 2){
-				printf(); // I NEED HELP THERE HOW TO CHECK THE CURRENT TIME 
-				printf("\t");
-				printf(pcb->p_id);
-				printf("\t");
-				printf(pcb->state);
-				printf("\n");
-			}
-			usleep(cl->q);
+			usleep(cl->q * 1000);
+			pcb->remaining_burst_len -= cl->q;
+			pcb->total_time += cl->q;
 			pcb->state = PCB_READY;
 			
+			if (cl->outmode == 2){
+				printf("%d\t%d\t", (int) (gettimeofday(&t, NULL) - start_time), pcb->p_id);
+				case (pcb->state)
+					1: printf("RUNNING\n");
+					2: printf("WAITING\n");
+					3: printf("READY\n")
+			}
+
 			pthread_cond_signal(cv_sch); // wake up scheduler (case 3)
 			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
 		}
 		else {
-			usleep(pcb->remaining_burst_len);
-			calcburst = 1;
-			int device_no = 0;
+			usleep(pcb->remaining_burst_len * 1000);
+			pcb->total_time += pcb->remaining_burst_len;
+			pcb->remaining_burst_len = 0;
+
+			time_t t;
+			srand((unsigned) time(&t));
+
 			// deal with i/o if needed
 			if (p > cl->p0) {
 				io_device *dev;
 				int duration;
 				pthread_mutex_t *dev_lock;
+				int device_no = 0;
 				if (cl->p0 <= p && p < cl->p0 + cl->p1) { // i/o with device 1
 					dev = dev1;
 					duration = cl->t1;
@@ -123,19 +129,14 @@ static void *process_th(void *args) {
 				dev->cur = pcb;
 				
 				//pthread_mutex_unlock(dev->mutex);
-				if (cl->outmode == 2){
-					printf(); // I NEED HELP THERE HOW TO CHECK THE CURRENT TIME 
-					printf("\t");
-					printf(pcb->p_id);
-					printf("\t");
-					printf("USING DEVICE %d", device_no);
-					printf("\n");
+				if (pl->outmode == 2) {
+					printf("%d\t"(int) (gettimeofday(&t, NULL) - start_time));
+					printf("%d\t", pcb->p_id);
+					printf("USING DEVICE %d\n", device_no);
 				}
-
-				usleep(duration);
+				usleep(duration * 1000);
 				
 				//pthread_mutex_lock(dev->mutex);
-				
 				dev->cur = NULL;
 				dev->count--;
 				
@@ -152,7 +153,8 @@ static void *process_th(void *args) {
 	} while (p > cl->p0);
 	
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
-	return_pid(&(args->pid_list), pcb->pid);
+	return_pid(args->pid_list, pcb->pid);
 	pthread_exit(NULL);
+	
 }
 
