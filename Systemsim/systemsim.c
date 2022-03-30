@@ -1,16 +1,18 @@
 #include "cl_args.h"
 #include "process.h"
 #include "system.h"
+#include <semaphore.h>
+#include <pthread.h>
 
 cl_args cl; // command line args
 
-time_t start_time;
+struct timeval start_time;
 
 // hardware structs
-cpu cpu;
+cpu *sim_cpu;
 
-io_device dev1;
-io_device dev2;
+io_device *dev1;
+io_device *dev2;
 
 // mutex for process generator and cpu scheduler threads
 pthread_mutex_t *mutex_sim; // controls access to many simulation resources/structs (essentially most global variables in this file)
@@ -20,10 +22,10 @@ sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullp
 
 pthread_cond_t *cv_sch; // scheduler cv
 
-pthread_thread_t pgen; // process generator
-pthread_thread_t sched; // scheduler
+pthread_t pgen; // process generator
+pthread_t sched; // scheduler
 
-pid_list *pid_list; // tracks available pid's
+pid_list *pids; // tracks available pid's
 
 // process generator thread (only one will be created)
 void *process_generator(void *args) {
@@ -31,22 +33,22 @@ void *process_generator(void *args) {
 	int total;
 	int n;
 
-	// timings
+	// random number generator init
 	time_t t;
 	srand((unsigned) time(&t));
 	
+	struct timeval now; // for time calculations
 	// argumental variables for process creations
 	pthread_t tid;
 	process_arg pargs;
 	pargs.cl = &cl;
-	pargs.cpu = &cpu;
-	pargs.dev1 = &dev1;
-	pargs.dev2 = &dev2;
+	pargs.cpu = sim_cpu;
+	pargs.dev1 = dev1;
+	pargs.dev2 = dev2;
 	pargs.cv_sch = cv_sch;
-	pargs.cv_rq = cv_rq;
 	pargs.mutex_sim = mutex_sim;
-	pargs.pid_list = pid_list;
-
+	pargs.pid_list = &pids;
+	
 	// initial generation loop
 	pthread_mutex_lock(mutex_sim);
 	for (total = 0; total < INITIAL_PROCESSES; ++total) {
@@ -54,24 +56,22 @@ void *process_generator(void *args) {
 		// 1. wait until less than max_p processes exist in the system
 
 		// 3. create PCB for new process
-		pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, (int) (gettimeofday(&t, NULL) - start_time));
+		gettimeofday(&now, NULL);
+		int dif = 1000 * (now.tv_sec - start_time.tv_sec) + now.tv_usec - start_time.tv_usec; 
+		pcb *newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif);
 		
 		// 4. add new process to ready queue
-		enqueue(&rq, newpcb);
+		enqueue(sim_cpu->rq, newpcb);
 		total++;
 
 		// 2. initialize process thread
 		pargs.pcb = newpcb;
 		
-		if (cl->outmode == 3){
-			printf("Process with id %lu is created at time", (int)tid);
+		if (cl.outmode >= OUTMODE_VERBOSE){
+			printf("Process with id %lu is created at time", tid);
 		}
-		n = pthread_create(&tid, NULL, process_th, (void *) pargs);
-		if (n != 0) {
-			printf("[ERROR] process_generator failed to create thread\n");
-			exit(1);
-		}
-
+		
+		pthread_create(&tid, NULL, process_th, (void *) &pargs);
 		
 		// 5. alert scheduler (case 5)
 		pthread_cond_signal(cv_sch);
@@ -84,9 +84,9 @@ void *process_generator(void *args) {
 	
 	// process generation loop
 	while (total < cl.all_p || cur != 0) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
-		if (cl.outmode == 2){
+		if (cl.outmode >= OUTMODE_BASIC){
 			pcb* tmp = get_pcb(gettid());
-			printf("%u \t %", (unsigned int) (gettimeofday(&t, NULL) - start_time));
+			printf("%u \t %", (unsigned int) (gettimeofday(&now, NULL) - start_time));
 			printf(tmp->pid);
 			printf("\t");
 			case(tmp->state)
@@ -226,6 +226,7 @@ void sim_end() {
 }
 
 int main(int argc, char **argv) {
+	printf("main\n");
 	// init
 	read_args(&cl, argc, argv);
 	sim_init();
@@ -233,7 +234,7 @@ int main(int argc, char **argv) {
 	sim_begin(); // start simulation threads
 	// simulate stuff
 	sim_end(); // print information to console too
-	
+	printf("main end\n");
 	return 0;
 }
 

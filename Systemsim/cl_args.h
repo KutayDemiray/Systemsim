@@ -1,3 +1,10 @@
+#ifndef CL_ARGS_H
+#define CL_ARGS_H
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 // algorithm types
 #define ALG_FCFS 1
 #define ALG_SJF 2
@@ -43,13 +50,13 @@ typedef struct {
 } cl_args;
 
 void read_args(cl_args *cl, int argc, char **argv) {
-	if (strcmp(atoi(argv[1]), "FCFS") == 0) {
+	if (strcmp(argv[1], "FCFS") == 0) {
 		cl->alg = ALG_FCFS;
 	}
-	else if (strcmp(atoi(argv[1]), "SJF") == 0) {
+	else if (strcmp(argv[1], "SJF") == 0) {
 		cl->alg = ALG_SJF;
 	}
-	else if (strcmp(atoi(argv[1]), "RR") == 0) {
+	else if (strcmp(argv[1], "RR") == 0) {
 		cl->alg = ALG_RR;
 	}
 	else {
@@ -67,7 +74,7 @@ void read_args(cl_args *cl, int argc, char **argv) {
 	cl->t1 = atoi(argv[3]);
 	cl->t2 = atoi(argv[4]);
 	
-	if (strcmp(atoi(argv[5], "fixed") == 0) {
+	if (strcmp(argv[5], "fixed") == 0) {
 		cl->burst_dist = FIXED;
 	}
 	else if (strcmp(argv[5], "uniform") == 0) {
@@ -94,3 +101,5 @@ void read_args(cl_args *cl, int argc, char **argv) {
 	cl->all_p = atoi(argv[14]);
 	cl->outmode = atoi(argv[15]);
 }
+
+#endif
