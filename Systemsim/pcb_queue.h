@@ -103,7 +103,7 @@ pcb *dequeue(pcb_queue *queue, int mode) {
 	}
 }
 
-pcb *getPcb(pcb_queue *queue, pthread_t tid){
+pcb *get_pcb(pcb_queue *queue, pthread_t tid){
 	pcb* tmp = queue->head;
 	for (; tmp != NULL; tmp = tmp->next){
 		if (tmp->item->t_id == tid)

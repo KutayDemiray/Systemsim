@@ -65,7 +65,9 @@ void *process_generator(void *args) {
 		// 2. initialize process thread
 		pargs.pcb = newpcb;
 		
-		// TODO fill args as needed
+		if (cl->outmode == 3){
+			printf("Process with id %lu is created at time", (int)tid);
+		}
 		n = pthread_create(&tid, NULL, process_th, (void *) pargs);
 		if (n != 0) {
 			printf("[ERROR] process_generator failed to create thread\n");
@@ -86,7 +88,7 @@ void *process_generator(void *args) {
 	// process generation loop
 	while (total < cl.all_p || cur != 0) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
 		if (cl.outmode == 2){
-			pcb* tmp = getPcb(gettid());
+			pcb* tmp = get_pcb(gettid());
 			printf("%u \t %", (unsigned int) (gettimeofday(&t, NULL) - start_time));
 			printf(tmp->pid);
 			printf("\t");
@@ -212,7 +214,8 @@ void sim_end() {
 	pthread_join(pgen, NULL); // TODO return may not be null (so that info can be carried etc.)
 	pthread_join(sched, NULL);
 	
-	// TODO print info (details depend on console args)
+	printf("pid\tarv\tdept\tcpu\twaitr\tturna\tn-bursts\tn-d1\tn-d2");
+	
 	
 	// frees
 	pid_list_delete(&pid_list);
