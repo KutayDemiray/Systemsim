@@ -16,6 +16,7 @@ typedef struct {
 	pthread_cond_t *cv_sch; // shared
 	pthread_cond_t *cv_rq; // shared
 	sem_t *sem_mutex_sim; // shared
+	pid_list *pid_list; // shared
 } process_arg;
 
 // simulated process as a thread (there may be many) TODO work in progress
@@ -49,7 +50,6 @@ static void *process_th(void *args) {
 		int tmp = rand();
 		p = ((double) (tmp % 1000)) / 1000.0;
 		
-		
 		// determine next cpu burst length
 		int burstwidth = cl->max_burst - cl->min_burst;
 		if (calcburst && cl->burst_dist != FIXED) {
@@ -58,10 +58,10 @@ static void *process_th(void *args) {
 				u = ((double) (rand() % 1000)) / 1000.0;
 				next = (int) (burstwidth * u);
 			}
-			else if (cl->burst_dist == EXPONENTIAL) {
+			else if (cl->burst_dist == EXPONENTIAL) { // algorithm below is taken from prof. korpeoglu's forum post
 				do {
 					u = ((double) (rand() % 1000)) / 1000.0;
-					next = (int) ((-1) * log(u) * burstwidth);
+					next = (int) ((-1) * log(u) * cl->burst_len);
 				} while (next < cl->min_burst || next > cl->max_burst)
 			}
 			else {
@@ -80,21 +80,24 @@ static void *process_th(void *args) {
 		}
 
 		else {
-			calcburst = 0;
 			usleep(pcb->next_burst_len);
-			calcburst = 1; //??????
+			calcburst = 1;
 			
 			// deal with i/o if needed
 			if (p > cl->p0) {
 				io_device *dev;
+				int duration;
 				if (cl->p0 <= p && p < cl->p0 + cl->p1) { // i/o with device 1
 					dev = dev1;
+					duration = cl->t1;
 				}
 				else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
 					dev = dev2;
+					duration = cl->t2;
 				}
 				
 				pcb->state = PCB_WAITING;
+				
 			}
 			
 		}
@@ -110,7 +113,7 @@ static void *process_th(void *args) {
 	// TODO more termination handling?
 	
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
-	
+	return_pid(&(args->pid_list), pcb->pid);
 	pthread_exit(NULL);
 }
 
