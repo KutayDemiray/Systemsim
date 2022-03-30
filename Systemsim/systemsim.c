@@ -13,14 +13,14 @@ io_device dev1;
 io_device dev2;
 
 // mutex for process generator and cpu scheduler threads
-// controls access to system resources (cpu, i/o devices etc.)
-sem_t *sem_mutex_sim;
+// controls access to many resources (cpu, i/o devices etc., essentially most global variables in this file)
+pthread_mutex_t *mutex_sim;
 
 
 sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
 sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
 
-pthread_cond_t cv_sch; // scheduler cv
+pthread_cond_t *cv_sch; // scheduler cv
 
 pthread_thread_t pgen; // process generator
 pthread_thread_t sched; // scheduler
@@ -50,7 +50,7 @@ void *process_generator(void *args) {
 		if (total < cl.all_p && (double) rand() / (double) RAND_MAX < cl.pg) {
 			// 1. wait until less than max_p processes exist in the system
 			sem_wait(sem_emptyprocs);
-			sem_wait(sem_mutex_sim);
+			pthread_mutex_lock(mutex_sim);
 			
 			// 2. create process thread
 			process_arg pargs;
@@ -69,9 +69,9 @@ void *process_generator(void *args) {
 			total++;
 			
 			// 5. alert scheduler (case 5)
-			pthread_cond_signal(&cv_sch);
-			
-			sem_post(sem_mutex_sim);
+			pthread_cond_signal(cv_sch);
+		
+			pthread_mutex_unlock(mutex_sim);
 			sem_post(sem_fullprocs);
 		}
 		
@@ -85,7 +85,7 @@ void *process_generator(void *args) {
 void *cpu_scheduler(void *args) {
 	// should keep running until ready queue is empty and no more processes will arrive (process_generator is terminated)
 	while (pthread_tryjoin_np(pgen, NULL) != 0 && cpu->rq->count > 0) {
-		sem_wait(sem_mutex_sim);
+		pthread_mutex_lock(mutex_sim);
 	
 		// while not running, sleep on cv
 		// scheduler woken up when:
@@ -97,7 +97,7 @@ void *cpu_scheduler(void *args) {
 		// signals for above cases are sent from elsewhere
 		
 		while (cpu->cur != NULL) { // TODO other conds?
-			pthread_cond_wait(&cv_sch);
+			pthread_cond_wait(cv_sch, mutex_sim);
 		}
 		
 		// when waken up
@@ -108,13 +108,13 @@ void *cpu_scheduler(void *args) {
 		cpu->cur = dequeue(&(cpu->rq));
 		
 		// wake up all processes (including selected) with broadcast
-		pthread_cond_broadcast(&cv_sch);
+		pthread_cond_broadcast(cv_sch);
 			
 		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
 		
 		// selected thread enters the cpu (TODO maybe already done above?)
 		
-		sem_signal(sem_mutex_sim);
+		pthread_mutex_unlock(mutex_sim);
 	}
 	
 	pthread_exit(NULL);
@@ -122,16 +122,19 @@ void *cpu_scheduler(void *args) {
 
 void sim_init() {
 	// semaphores
-	sem_unlink(SEMNAME_MUTEX_SIM);
+	//sem_unlink(SEMNAME_MUTEX_SIM);
 	sem_unlink(SEMNAME_FULLPROCS);
 	sem_unlink(SEMNAME_EMPTYPROCS);
 	
-	sem_mutex_sim = sem_open(SEMNAME_MUTEX_SIM, O_RDWR | O_CREAT, 0660, 1);
+	//sem_mutex_sim = sem_open(SEMNAME_MUTEX_SIM, O_RDWR | O_CREAT, 0660, 1);
 	sem_fullprocs = sem_open(SEMNAME_FULLPROCS, O_RDWR | O_CREAT, 0660, 0);
 	sem_emptyprocs = sem_open(SEMNAME_EMPTYPROCS, O_RDWR | O_CREAT, 0660, cl.max_p);
 	
 	// conditional variables
-	pthread_cond_init(&cv_sch, NULL);
+	pthread_cond_init(cv_sch, NULL);
+	
+	// mutexes
+	pthread_mutex_init(mutex_sim, NULL);
 	
 	// hardware structs
 	cpu_init(&cpu);
