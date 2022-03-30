@@ -4,6 +4,9 @@
 
 cl_args cl; // command line args
 
+time_t start_time;
+
+// hardware structs
 cpu cpu;
 
 io_device dev1;
@@ -59,7 +62,7 @@ void *process_generator(void *args) {
 			}
 			
 			// 3. create PCB for new process
-			pcb *newpcb = pcb_create(total, PCB_READY, tid, 1, 0);
+			pcb *newpcb = pcb_create(total, PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
 			
 			// 4. add new process to ready queue
 			enqueue(&rq, newpcb);
@@ -140,6 +143,8 @@ void sim_begin() {
 	// simulator threads
 	pthread_create(&pgen, NULL, process_generator, NULL);
 	pthread_create(&sched, NULL, cpu_scheduler, NULL);
+	
+	gettimeofday(&start_time, NULL);
 }
 
 void sim_end() {
