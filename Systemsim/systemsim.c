@@ -71,7 +71,7 @@ void *process_generator(void *args) {
 			
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(cv_sch);
-		
+
 			pthread_mutex_unlock(mutex_sim);
 			sem_post(sem_fullprocs);
 		}
