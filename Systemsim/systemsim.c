@@ -13,8 +13,7 @@ io_device dev1;
 io_device dev2;
 
 // mutex for process generator and cpu scheduler threads
-// controls access to many resources (cpu, i/o devices etc., essentially most global variables in this file)
-pthread_mutex_t *mutex_sim;
+pthread_mutex_t *mutex_sim; // controls access to many simulation resources/structs (essentially most global variables in this file)
 
 sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
 sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
@@ -49,14 +48,13 @@ void *process_generator(void *args) {
 	pargs.pid_list = pid_list;
 
 	// initial generation loop
+	pthread_mutex_lock(mutex_sim);
 	for (total = 0; total < INITIAL_PROCESSES; ++total) {
 		// generate initial process
 		// 1. wait until less than max_p processes exist in the system
-		sem_wait(sem_emptyprocs);
-		pthread_mutex_lock(mutex_sim);
-		
+
 		// 3. create PCB for new process
-		pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
+		pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, (int) (gettimeofday(&t, NULL) - start_time));
 		
 		// 4. add new process to ready queue
 		enqueue(&rq, newpcb);
@@ -77,13 +75,12 @@ void *process_generator(void *args) {
 		
 		// 5. alert scheduler (case 5)
 		pthread_cond_signal(cv_sch);
-
-		pthread_mutex_unlock(mutex_sim);
-		sem_post(sem_fullprocs); 
 	}
+	pthread_mutex_unlock(mutex_sim);
 
 	int cur;
 	sem_getvalue(sem_fullprocs, &cur);
+	pthread_mutex_unlock(mutex_sim);
 	
 	// process generation loop
 	while (total < cl.all_p || cur != 0) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
@@ -100,7 +97,7 @@ void *process_generator(void *args) {
 		}
 		
 		// sleep for 5 ms
-		usleep(5);
+		usleep(5000);
 		
 		// generate process
 		if (total < cl.all_p && (double) rand() / (double) RAND_MAX < cl.pg) {
@@ -125,6 +122,13 @@ void *process_generator(void *args) {
 				exit(1);
 			}
 			
+			// 3. create PCB for new process
+			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, (int) (gettimeofday(&t, NULL) - start_time));
+			
+			// 4. add new process to ready queue
+			enqueue(&rq, newpcb);
+			total++;
+			
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(cv_sch);
 
@@ -145,12 +149,12 @@ void *cpu_scheduler(void *args) {
 		pthread_mutex_lock(mutex_sim);
 	
 		// while not running, sleep on cv
-		// scheduler woken up when:
-			// TODO 1. the running thread terminates
-			// TODO 2. the running thread starts i/o
-			// TODO 3. time quantum for running thread expires (RR)
-			// TODO 4. a process returns from i/o and is added to the ready queue
-			// TODO 5. a new process is created and is added to the ready queue
+		// scheduler is woken up when:
+			// 1. the running thread terminates
+			// 2. the running thread starts i/o
+			// 3. time quantum for running thread expires (RR)
+			// 4. a process returns from i/o and is added to the ready queue
+			// 5. a new process is created and is added to the ready queue
 		// signals for above cases are sent from elsewhere
 		
 		while (cpu->cur != NULL) { // TODO other conds?

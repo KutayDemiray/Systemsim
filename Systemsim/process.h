@@ -94,9 +94,6 @@ static void *process_th(void *args) {
 			pcb->total_time += pcb->remaining_burst_len;
 			pcb->remaining_burst_len = 0;
 
-			time_t t;
-			srand((unsigned) time(&t));
-
 			// deal with i/o if needed
 			if (p > cl->p0) {
 				io_device *dev;
@@ -134,6 +131,7 @@ static void *process_th(void *args) {
 					printf("%d\t", pcb->p_id);
 					printf("USING DEVICE %d\n", device_no);
 				}
+
 				usleep(duration * 1000);
 				
 				//pthread_mutex_lock(dev->mutex);
