@@ -62,7 +62,7 @@ void *process_generator(void *args) {
 			}
 			
 			// 3. create PCB for new process
-			pcb *newpcb = pcb_create(total, PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
+			pcb *newpcb = pcb_create(pick_pid(&pid_list), PCB_READY, tid, cl->min_burst + cl->burst_len, (int) (gettimeofday(&t, NULL) - start_time), 0);
 			
 			// 4. add new process to ready queue
 			enqueue(&rq, newpcb);

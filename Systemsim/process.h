@@ -22,6 +22,8 @@ static void *process_th(void *args) {
 	
 	// TODO wake up scheduler
 	
+	
+	return_pid(&pid_list, pcb->pid);
 	pthread_exit(NULL);
 }
 

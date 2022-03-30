@@ -128,3 +128,58 @@ pcb *dequeue(ready_queue *rq) {
 	return dequeue(&(rq->queue), rq->mode);
 }
 
+// simple linked list of pid's and their states
+typedef struct {
+	int pid;
+	int used;
+	pid_list *next;
+} pid_list;
+
+int pid_list_init(pid_list **list, int max_pid) {
+	int i;
+	*list = NULL;
+	pid_list *tmp = *list;
+	for (i = max_pid; i > 0; i--) {
+		tmp = malloc(sizeof(pid_list));
+		tmp->pid = i;
+		tmp->used = 0;
+		tmp->next = *list;
+		*list = tmp;
+	}
+}
+
+int pid_list_delete(pid_list **list) {
+	pid_list *tmp;
+	while (*list != NULL) {
+		tmp = *list;
+		*list = *list->next;
+		free(tmp);
+	}
+	*list = NULL;
+}
+
+int pick_pid(pid_list **list) {
+	pid_list *cur = *list;
+	while (cur != NULL) {
+		if (cur->used == 0) {
+			cur->used = 1;
+			return cur->pid;
+		}
+		cur = cur->next;
+	}
+	
+	return -1;
+}
+
+void return_pid(pcb_list **list, int pid) {
+	pid_list *cur = *list;
+	while (cur != NULL) {
+		if (cur->pid == pid) {
+			cur->used = 0;
+			return;
+		}
+		cur = cur->next;
+	}
+}
+
+
