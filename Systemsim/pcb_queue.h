@@ -24,17 +24,15 @@ typedef struct {
 	int total_time;
 } pcb;
 
-pcb *pcb_create(int p_id, int state, pthread_t t_id, int next_burst_len, int start_time, int total_time) {
+pcb *pcb_create(int p_id, int state, int start_time) {
 	pcb *newpcb = malloc(sizeof(pcb));
 	newpcb->p_id = p_id;
 	newpcb->state = state;
-	newpcb->t_id = t_id;
-	newpcb->next_burst_len = next_burst_len;
-	newpcb->remaining_burst_len = next_burst_len;
+	newpcb->remaining_burst_len = 0;
 	newpcb->bursts_completed = 0;
 	newpcb->start_time = start_time;
 	newpcb->finish_time = -1;
-	newpcb->total_time = total_time;
+	newpcb->total_time = 0;
 }
 
 typedef struct {
