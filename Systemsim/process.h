@@ -21,8 +21,6 @@ typedef struct {
 
 // simulated process as a thread (there may be many) TODO work in progress
 static void *process_th(void *args) {
-	
-	pthread_cond_wait(&cv_sch, &sem_mutex_sim); //before accessing the shared data
 	// read args
 	cpu *cpu = ((process_arg) args)->cpu;
 	pcb *pcb = ((process_arg) args)->pcb;
@@ -37,7 +35,7 @@ static void *process_th(void *args) {
 	int calcburst = 1; // next burst shouldn't be calculated before current one finishes
 	double p;
 	do {
-		sem_wait(sem_mutex_sim);
+		pthread_mutex_lock(mutex_sim);
 		
 		// wait until cpu scheduler wakes processes up
 		// cpu scheduler wakes up all processes when it picks one to run
@@ -73,12 +71,14 @@ static void *process_th(void *args) {
 		
 		// "do" the burst by sleeping
 		if (cl->alg == ALG_RR && cl->q < pcb->next_burst_len) {
+			pcb->state = PCB_RUNNING;
 			pcb->next_burst_len -= q;
 			calcburst = 0;
 			usleep(cl->q);
-			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again ASK
+			pcb->state = PCB_READY;
+			pthread_cond_signal(cv_sch); // wake up scheduler (case 3)
+			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
 		}
-
 		else {
 			usleep(pcb->next_burst_len);
 			calcburst = 1;
@@ -87,30 +87,50 @@ static void *process_th(void *args) {
 			if (p > cl->p0) {
 				io_device *dev;
 				int duration;
+				pthread_mutex_t *dev_lock;
 				if (cl->p0 <= p && p < cl->p0 + cl->p1) { // i/o with device 1
 					dev = dev1;
 					duration = cl->t1;
+					dev_lock = dev1_lock;
 				}
 				else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
 					dev = dev2;
 					duration = cl->t2;
+					dev_lock = dev2_lock;
 				}
 				
 				pcb->state = PCB_WAITING;
+
+				pthread_mutex_lock(dev->mutex);
 				
+				dev->count++;
+				while (dev->cur != NULL) {
+					pthread_cond_wait(dev->cv, dev->mutex);
+				}
+				pthread_cond_signal(cv_sch); // wake up scheduler (case 2)
+				
+				dev->cur = pcb;
+				
+				//pthread_mutex_unlock(dev->mutex);
+				
+				usleep(duration);
+				
+				//pthread_mutex_lock(dev->mutex);
+				
+				dev->cur = NULL;
+				dev->count--;
+				
+				pthread_cond_signal(dev->cv);
+				pthread_mutex_unlock(dev->mutex);
+				
+				pcb->state = PCB_READY;
+				enqueue(&(cpu->rq), pcb);
+				pthread_cond_signal(cv_sch); // wake up scheduler (case 4)
 			}
-			
 		}
 		
-		// if the process won't be terminated, put it back on the queue
-		if (p > cl->p0) {
-			enqueue(&(cpu->rq), pcb);
-		}
-		
-		sem_post(sem_mutex_sim);
+		pthread_mutex_unlock(mutex_sim);
 	} while (p > cl->p0);
-	
-	// TODO more termination handling?
 	
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
 	return_pid(&(args->pid_list), pcb->pid);

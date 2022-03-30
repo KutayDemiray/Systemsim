@@ -16,10 +16,11 @@ void cpu_init(cpu *cpu, int alg) {
 
 typedef struct {
 	int count;
-	pthread_cond_t cv;
+	pcb *cur;
+	pthread_cond_t *cv;
 } io_device;
 
 void io_device_init(io_device *dev) {
 	dev->count = 0;
-	pthread_cond_init(&(dev->cv));
+	pthread_cond_init(dev->cv);
 }

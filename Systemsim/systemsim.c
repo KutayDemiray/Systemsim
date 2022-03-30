@@ -47,7 +47,7 @@ void *process_generator(void *args) {
 		if (total < cl.all_p && (double) rand() / (double) RAND_MAX < cl.pg) {
 			// 1. wait until less than max_p processes exist in the system
 			sem_wait(sem_emptyprocs);
-			sem_wait(sem_mutex_sim);
+			pthread_mutex_lock(mutex_sim);
 			
 			// 2. create process thread
 			process_arg pargs;
@@ -68,7 +68,7 @@ void *process_generator(void *args) {
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(&cv_sch);
 			
-			sem_post(sem_mutex_sim);
+			pthread_mutex_unlock(mutex_sim);
 			sem_post(sem_fullprocs);
 		}
 		
