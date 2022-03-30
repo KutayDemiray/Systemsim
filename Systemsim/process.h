@@ -70,9 +70,9 @@ static void *process_th(void *args) {
 		}
 		
 		// "do" the burst by sleeping
-		if (cl->alg == ALG_RR && cl->q < pcb->next_burst_len) {
+		if (cl->alg == ALG_RR && cl->q < pcb->remaining_burst_len) {
 			pcb->state = PCB_RUNNING;
-			pcb->next_burst_len -= q;
+			pcb->remaining_burst_len -= q;
 			calcburst = 0;
 			usleep(cl->q);
 			pcb->state = PCB_READY;
@@ -80,7 +80,7 @@ static void *process_th(void *args) {
 			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
 		}
 		else {
-			usleep(pcb->next_burst_len);
+			usleep(pcb->remaining_burst_len);
 			calcburst = 1;
 			
 			// deal with i/o if needed

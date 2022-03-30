@@ -23,4 +23,5 @@ typedef struct {
 void io_device_init(io_device *dev) {
 	dev->count = 0;
 	pthread_cond_init(dev->cv);
+	dev->cur = NULL;
 }
