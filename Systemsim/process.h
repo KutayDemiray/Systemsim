@@ -15,7 +15,7 @@ typedef struct {
 	pcb *pcb; // shared
 	pthread_cond_t *cv_sch; // shared
 	pthread_cond_t *cv_rq; // shared
-	sem_t *sem_mutex_sim; // shared
+	pthread_mutex_t *mutex_sim; // shared
 	pid_list *pid_list; // shared
 } process_arg;
 
@@ -26,7 +26,7 @@ static void *process_th(void *args) {
 	pcb *pcb = ((process_arg) args)->pcb;
 	pthread_cond_t *cv_sch = ((process_arg) args)->cv_sch;
 	pthread_cond_t *cv_rq = ((process_arg) args)->cv_rq;
-	sem_t *sem_mutex_sim = ((process_arg) args)->sem_mutex_sim;
+	pthread_mutex_t *mutex_sim = ((process_arg) args)->mutex_sim;
 	cl_args* cl = ((process_arg) args)->cl;
 	
 	time_t t;
