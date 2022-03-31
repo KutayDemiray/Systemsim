@@ -13,6 +13,7 @@
 #include <math.h>
 #include "pcb_queue.h"
 #include "system.h"
+#include <semaphore.h>
 
 typedef struct {
 	cl_args *cl; // shared
@@ -23,6 +24,7 @@ typedef struct {
 	pthread_mutex_t *mutex_sim; // shared
 	pid_list **pid_list; // shared
 	struct timeval start_time;
+	sem_t *emptyprocs;
 } process_arg;
 
 // simulated process as a thread (there may be many) TODO work in progress
@@ -33,15 +35,13 @@ static void *process_th(void *args) {
 	io_device *dev2 = ((process_arg *) args)->dev2;
 	pcb *pcb = ((process_arg *) args)->pcb;
 	pthread_cond_t *cv_sch = ((process_arg *) args)->cv_sch;
-	pthread_cond_t *cv_rq = ((process_arg *) args)->cpu->rq->cv;
+	pthread_cond_t cv_rq = ((process_arg *) args)->cpu->rq->cv;
 	pthread_mutex_t *mutex_sim = ((process_arg *) args)->mutex_sim;
 	cl_args* cl = ((process_arg *) args)->cl;
 	struct timeval start_time = ((process_arg *) args)->start_time;
 	
 	time_t t;
 	srand((unsigned) time(&t));
-	
-	struct timeval now;
 	
 	double p;
 	do {
@@ -51,7 +51,7 @@ static void *process_th(void *args) {
 		// cpu scheduler wakes up all processes when it picks one to run
 		// so all processes should check whether they're the running process or not when they are awake
 		while (cpu->cur->p_id != pcb->p_id) {
-			pthread_cond_wait(cv_rq, mutex_sim);
+			pthread_cond_wait(&cv_rq, mutex_sim);
 		}
 		
 		// determine whether the process will i/o with a device or terminate after this burst
@@ -90,9 +90,10 @@ static void *process_th(void *args) {
 			pcb->state = PCB_READY;
 			
 			if (cl->outmode == 2){
+				struct timeval now;
 				gettimeofday(&now, NULL);
-				int dif = 1000 * (now.tv_sec - start_time.tv_sec) + now.tv_usec - start_time.tv_usec; 
-				printf("%d\t%d\t", dif, pcb->p_id);
+				long int dif =  (now.tv_sec - start_time.tv_sec) / 1000 + (1000) * (now.tv_usec - start_time.tv_usec);  
+				printf("%ld\t%d\t", dif, pcb->p_id);
 				switch (pcb->state) {
 					case PCB_RUNNING: printf("RUNNING\n"); break;
 					case PCB_WAITING: printf("WAITING\n"); break;
@@ -126,21 +127,22 @@ static void *process_th(void *args) {
 				
 				pcb->state = PCB_WAITING;
 
-				pthread_mutex_lock(dev->mutex);
+				pthread_mutex_lock(&(dev->mutex));
 				
 				dev->count++;
 				while (dev->cur != NULL) {
-					pthread_cond_wait(dev->cv, dev->mutex);
+					pthread_cond_wait(&(dev->cv), &(dev->mutex)); 
 				}
 				pthread_cond_signal(cv_sch); // wake up scheduler (case 2)
 				
 				dev->cur = pcb;
 				
 				//pthread_mutex_unlock(dev->mutex);
-				if (cl->outmode >= OUTMODE_BASIC) {
+				if (cl->outmode >= OUTMODE_VERBOSE) {
+					struct timeval now;
 					gettimeofday(&now, NULL);
-					int dif = 1000 * (now.tv_sec - start_time.tv_sec) + now.tv_usec - start_time.tv_usec; 
-					printf("%d\t", dif);
+					long int dif =  (now.tv_sec - start_time.tv_sec) / 1000 + (1000) * (now.tv_usec - start_time.tv_usec); 
+					printf("%ld\t", dif);
 					printf("%d\t", pcb->p_id);
 					printf("USING DEVICE %d\n", device_no);
 				}
@@ -151,8 +153,8 @@ static void *process_th(void *args) {
 				dev->cur = NULL;
 				dev->count--;
 				
-				pthread_cond_signal(dev->cv);
-				pthread_mutex_unlock(dev->mutex);
+				pthread_cond_signal(&(dev->cv));
+				pthread_mutex_unlock(&(dev->mutex));
 				
 				pcb->state = PCB_READY;
 				enqueue(cpu->rq, pcb);
@@ -163,10 +165,16 @@ static void *process_th(void *args) {
 		pthread_mutex_unlock(mutex_sim);
 	} while (p > cl->p0);
 	
+	pthread_mutex_lock(mutex_sim);
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
+	if (cl->outmode >= OUTMODE_VERBOSE) {
+		printf("PROCESS %d TERMINATED\n", pcb->p_id);
+	}
 	return_pid(((process_arg *) args)->pid_list, pcb->p_id);
-	pthread_exit(NULL);
+	sem_wait(((process_arg *) args)->emptyprocs);
+	pthread_mutex_unlock(mutex_sim);
 	
+	pthread_exit(NULL);
 }
 
 #endif

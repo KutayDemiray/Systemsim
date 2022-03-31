@@ -9,7 +9,7 @@
  
 cl_args *cl; // command line args
 
-struct timeval start_time;
+struct timeval start_time; 
 
 // hardware structs
 cpu *sim_cpu;
@@ -34,7 +34,7 @@ int cur = 0; // all processes that haven't finished yet
 pid_list *pids; // tracks available pid's
 
 // process generator thread (only one will be created)
-void *process_generator(void *args) {
+static void *process_generator(void *args) {
 	// numeric variables
 	int total;
 
@@ -53,32 +53,30 @@ void *process_generator(void *args) {
 	pargs.cv_sch = &cv_sch;
 	pargs.mutex_sim = &mutex_sim;
 	pargs.pid_list = &pids;
+	pargs.start_time = start_time;
+	pargs.emptyprocs = sem_emptyprocs;
 	
 	pcb *newpcb;
 	// initial generation loop
 	pthread_mutex_lock(&mutex_sim);
 	for (total = 0; total < INITIAL_PROCESSES; ++total) {
-		// generate initial process
 		// 1. wait until less than max_p processes exist in the system
-
-		// 3. create PCB for new process
-		gettimeofday(&now, NULL);
-		int dif = 1000 * (now.tv_sec - start_time.tv_sec) + now.tv_usec - start_time.tv_usec; 
-		newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif);
+		sem_wait(sem_emptyprocs);
 		
-		// 4. add new process to ready queue
+		// 2. create PCB for new process
+		gettimeofday(&now, NULL);
+		long int dif =  (now.tv_sec - start_time.tv_sec) / 1000 + (1000) * (now.tv_usec - start_time.tv_usec); 
+		newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
+		
+		// 3. add new process to ready queue
 		enqueue(sim_cpu->rq, newpcb);
 		total++;
 
-		// 2. initialize process thread
+		// 4. create process thread
+		// process_arg pargs; // done in the start of this method
 		pargs.pcb = newpcb;
 		
 		pthread_create(&tid, NULL, process_th, (void *) &pargs);
-		cur++;
-		
-		if (cl->outmode >= OUTMODE_VERBOSE){
-			printf("Process with id %lu is created at time", tid);
-		}
 		
 		// 5. alert scheduler (case 5)
 		pthread_cond_signal(&cv_sch);
@@ -89,6 +87,7 @@ void *process_generator(void *args) {
 	pthread_mutex_unlock(&mutex_sim);
 	
 	// process generation loop
+	printf("generate others\n");
 	while (total < cl->all_p || cur != 0) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
 		/* TODO ?
 		if (cl.outmode >= OUTMODE_BASIC){
@@ -107,7 +106,7 @@ void *process_generator(void *args) {
 		*/
 		// sleep for 5 ms
 		usleep(5000);
-		
+		printf("generate %d\n", total);
 		// generate process
 		if (total < cl->all_p && (double) rand() / (double) RAND_MAX < cl->pg) {
 			// 1. wait until less than max_p processes exist in the system
@@ -116,7 +115,7 @@ void *process_generator(void *args) {
 			
 			// 2. create PCB for new process
 			gettimeofday(&now, NULL);
-			int dif = 1000 * (now.tv_sec - start_time.tv_sec) + now.tv_usec - start_time.tv_usec; 
+			long int dif =  (now.tv_sec - start_time.tv_sec) / 1000 + (1000) * (now.tv_usec - start_time.tv_usec); 
 			newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
 			
 			// 3. add new process to ready queue
@@ -128,15 +127,6 @@ void *process_generator(void *args) {
 			pargs.pcb = newpcb;
 			
 			pthread_create(&tid, NULL, process_th, (void *) &pargs);
-			
-			// 3. create PCB for new process
-			gettimeofday(&now, NULL);
-			dif = 1000 * (now.tv_sec - start_time.tv_sec) + now.tv_usec - start_time.tv_usec; 
-			pcb *newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif);
-			
-			// 4. add new process to ready queue
-			enqueue(sim_cpu->rq, newpcb);
-			total++;
 			
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(&cv_sch);
@@ -156,7 +146,7 @@ void *process_generator(void *args) {
 }
 
 // cpu scheduler thread (only one will be created)
-void *cpu_scheduler(void *args) {
+static void *cpu_scheduler(void *args) {
 	// should keep running until ready queue is empty and no more processes will arrive (process_generator is terminated)
 	while (!pgen_done && sim_cpu->rq->length > 0) { 
 		pthread_mutex_lock(&mutex_sim);

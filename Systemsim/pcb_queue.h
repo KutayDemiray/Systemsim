@@ -51,10 +51,9 @@ typedef struct pcb_queue {
 	pcb_node *tail;
 } pcb_queue;
 
-void pcb_queue_init(pcb_queue **queue) {
-	*queue = malloc(sizeof(pcb_queue));
-	(*queue)->head = NULL;
-	(*queue)->tail = NULL;
+void pcb_queue_init(pcb_queue *queue) {
+	queue->head = NULL;
+	queue->tail = NULL;
 }
 
 void enqueue_node(pcb_queue *queue, pcb *item) {
@@ -121,7 +120,7 @@ pcb *get_pcb(pcb_queue *queue, pthread_t tid){
 
 // ready queue
 typedef struct ready_queue {
-	pthread_cond_t *cv;
+	pthread_cond_t cv;
 	int mode;
 	int length;
 	pcb_queue queue;
@@ -129,8 +128,9 @@ typedef struct ready_queue {
 
 void ready_queue_init(ready_queue **rq, int alg) {
 	*rq = malloc(sizeof(ready_queue));
+	pcb_queue_init(&((*rq)->queue));
 	(*rq)->length = 0;
-	pthread_cond_init((*rq)->cv, NULL);
+	pthread_cond_init(&((*rq)->cv), NULL);
 	(*rq)->mode = alg == ALG_SJF ? MODE_PRIO : MODE_FIFO; // PRIO or FIFO
 }
 
