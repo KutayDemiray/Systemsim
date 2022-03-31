@@ -35,6 +35,9 @@ pid_list *pids; // tracks available pid's
 
 // process generator thread (only one will be created)
 static void *process_generator(void *args) {
+	if (cl->outmode >= OUTMODE_VERBOSE) {
+		printf("process_generator() start\n");
+	}
 	// numeric variables
 	int total;
 
@@ -70,13 +73,16 @@ static void *process_generator(void *args) {
 		
 		// 3. add new process to ready queue
 		enqueue(sim_cpu->rq, newpcb);
-		total++;
 
 		// 4. create process thread
 		// process_arg pargs; // done in the start of this method
 		pargs.pcb = newpcb;
 		
 		pthread_create(&tid, NULL, process_th, (void *) &pargs);
+		
+		if (cl->outmode >= OUTMODE_VERBOSE) {
+			printf("Process generated with pid %d (total: %d)\n", newpcb->p_id, total);
+		}
 		
 		// 5. alert scheduler (case 5)
 		pthread_cond_signal(&cv_sch);
@@ -106,7 +112,6 @@ static void *process_generator(void *args) {
 		*/
 		// sleep for 5 ms
 		usleep(5000);
-		printf("generate %d\n", total);
 		// generate process
 		if (total < cl->all_p && (double) rand() / (double) RAND_MAX < cl->pg) {
 			// 1. wait until less than max_p processes exist in the system
@@ -127,6 +132,9 @@ static void *process_generator(void *args) {
 			pargs.pcb = newpcb;
 			
 			pthread_create(&tid, NULL, process_th, (void *) &pargs);
+			if (cl->outmode >= OUTMODE_VERBOSE) {
+				printf("Process generated with pid %d (total: %d)\n", newpcb->p_id, total);
+			}
 			
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(&cv_sch);
@@ -142,13 +150,20 @@ static void *process_generator(void *args) {
 	pgen_done = 1;
 	pthread_mutex_unlock(&mutex_sim);
 	
+	if (cl->outmode >= OUTMODE_VERBOSE) {
+		printf("process_generator() end\n");
+	}
 	pthread_exit(NULL);
 }
 
 // cpu scheduler thread (only one will be created)
 static void *cpu_scheduler(void *args) {
+	if (cl->outmode >= OUTMODE_VERBOSE) {
+		printf("cpu_scheduler() start\n");
+	}
+
 	// should keep running until ready queue is empty and no more processes will arrive (process_generator is terminated)
-	while (!pgen_done && sim_cpu->rq->length > 0) { 
+	while (!pgen_done || sim_cpu->rq->length > 0) { 
 		pthread_mutex_lock(&mutex_sim);
 	
 		// while not running, sleep on cv
@@ -181,6 +196,9 @@ static void *cpu_scheduler(void *args) {
 		pthread_mutex_unlock(&mutex_sim);
 	}
 	
+	if (cl->outmode >= OUTMODE_VERBOSE) {
+		printf("cpu_scheduler() end\n");
+	}
 	pthread_exit(NULL);
 }
 
@@ -210,7 +228,7 @@ void sim_init() {
 	io_device_init(&dev2);
 	
 	// pid_list
-	pid_list_init(&pids, cl->max_p);
+	pid_list_init(&pids, cl->all_p);
 	
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("sim_init() end\n");

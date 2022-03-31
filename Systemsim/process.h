@@ -50,7 +50,7 @@ static void *process_th(void *args) {
 		// wait until cpu scheduler wakes processes up
 		// cpu scheduler wakes up all processes when it picks one to run
 		// so all processes should check whether they're the running process or not when they are awake
-		while (cpu->cur->p_id != pcb->p_id) {
+		while (cpu->cur != NULL && cpu->cur->p_id != pcb->p_id) {
 			pthread_cond_wait(&cv_rq, mutex_sim);
 		}
 		
@@ -124,20 +124,17 @@ static void *process_th(void *args) {
 					duration = cl->t2;
 					device_no = 2;
 				}
-				
-				pcb->state = PCB_WAITING;
-
 				pthread_mutex_lock(&(dev->mutex));
+				pcb->state = PCB_WAITING;
 				
 				dev->count++;
-				while (dev->cur != NULL) {
+				while (dev->cur != NULL && dev->cur->p_id != pcb->p_id) {
 					pthread_cond_wait(&(dev->cv), &(dev->mutex)); 
 				}
 				pthread_cond_signal(cv_sch); // wake up scheduler (case 2)
 				
 				dev->cur = pcb;
 				
-				//pthread_mutex_unlock(dev->mutex);
 				if (cl->outmode >= OUTMODE_VERBOSE) {
 					struct timeval now;
 					gettimeofday(&now, NULL);
@@ -149,16 +146,16 @@ static void *process_th(void *args) {
 
 				usleep(duration * 1000);
 				
-				//pthread_mutex_lock(dev->mutex);
 				dev->cur = NULL;
 				dev->count--;
 				
-				pthread_cond_signal(&(dev->cv));
-				pthread_mutex_unlock(&(dev->mutex));
+				pthread_cond_broadcast(&(dev->cv));
+				
 				
 				pcb->state = PCB_READY;
 				enqueue(cpu->rq, pcb);
 				pthread_cond_signal(cv_sch); // wake up scheduler (case 4)
+				pthread_mutex_unlock(&(dev->mutex));
 			}
 		}
 		
@@ -171,7 +168,7 @@ static void *process_th(void *args) {
 		printf("PROCESS %d TERMINATED\n", pcb->p_id);
 	}
 	return_pid(((process_arg *) args)->pid_list, pcb->p_id);
-	sem_wait(((process_arg *) args)->emptyprocs);
+	sem_post(((process_arg *) args)->emptyprocs);
 	pthread_mutex_unlock(mutex_sim);
 	
 	pthread_exit(NULL);
