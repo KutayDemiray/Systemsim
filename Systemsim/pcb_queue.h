@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include "cl_args.h"
 
 // process state enum
 #define PCB_RUNNING 1
@@ -36,6 +37,7 @@ pcb *pcb_create(int p_id, int state, int start_time) {
 	newpcb->start_time = start_time;
 	newpcb->finish_time = -1;
 	newpcb->total_time = 0;
+	return newpcb;
 }
 
 typedef struct pcb_node {
@@ -45,14 +47,12 @@ typedef struct pcb_node {
 } pcb_node;
 
 typedef struct pcb_queue {
-	int count;
 	pcb_node *head;
 	pcb_node *tail;
 } pcb_queue;
 
 void pcb_queue_init(pcb_queue **queue) {
 	*queue = malloc(sizeof(pcb_queue));
-	(*queue)->count = 0;
 	(*queue)->head = NULL;
 	(*queue)->tail = NULL;
 }
@@ -64,7 +64,7 @@ void enqueue_node(pcb_queue *queue, pcb *item) {
 	tmp->prev = queue->tail;
 	tmp->next = NULL;
 	
-	if (queue->count == 0) {
+	if (queue->head == NULL) {
 		queue->head = tmp;
 	}
 	else {
@@ -72,7 +72,6 @@ void enqueue_node(pcb_queue *queue, pcb *item) {
 	}
 	
 	queue->tail = tmp;
-	queue->count++;
 }
 
 // dequeue mode
@@ -80,7 +79,7 @@ void enqueue_node(pcb_queue *queue, pcb *item) {
 #define MODE_PRIO 2
 
 pcb *dequeue_node(pcb_queue *queue, int mode) {
-	if (queue->count == 0) {
+	if (queue->head == NULL) {
 		return NULL;
 	}
 	else if (mode == MODE_FIFO) {
@@ -89,7 +88,6 @@ pcb *dequeue_node(pcb_queue *queue, int mode) {
 		queue->tail = queue->tail->prev;
 		queue->tail->next = NULL;
 		free(tmp);
-		queue->count--;
 		return rv;
 	}
 	else if (mode == MODE_PRIO) {
@@ -104,7 +102,7 @@ pcb *dequeue_node(pcb_queue *queue, int mode) {
 		}
 		
 		free(tmp);
-		queue->count--;
+		return rv;
 	}
 	else {
 		return NULL;
@@ -125,12 +123,13 @@ pcb *get_pcb(pcb_queue *queue, pthread_t tid){
 typedef struct ready_queue {
 	pthread_cond_t *cv;
 	int mode;
+	int length;
 	pcb_queue queue;
 } ready_queue;
 
 void ready_queue_init(ready_queue **rq, int alg) {
 	*rq = malloc(sizeof(ready_queue));
-	
+	(*rq)->length = 0;
 	pthread_cond_init((*rq)->cv, NULL);
 	(*rq)->mode = alg == ALG_SJF ? MODE_PRIO : MODE_FIFO; // PRIO or FIFO
 }
@@ -141,9 +140,12 @@ void enqueue(ready_queue *rq, pcb *pcb) {
 		exit(1);
 	}
 	enqueue_node(&(rq->queue), pcb);
+	rq->length++;
 }
 
 pcb *dequeue(ready_queue *rq) {
+	if (rq->queue.head != NULL)
+		rq->length--;
 	return dequeue_node(&(rq->queue), rq->mode);
 }
 
@@ -154,7 +156,7 @@ typedef struct pid_list {
 	struct pid_list *next;
 } pid_list;
 
-int pid_list_init(pid_list **list, int max_pid) {
+void pid_list_init(pid_list **list, int max_pid) {
 	int i;
 	*list = NULL;
 	pid_list *tmp = *list;
@@ -167,7 +169,7 @@ int pid_list_init(pid_list **list, int max_pid) {
 	}
 }
 
-int pid_list_delete(pid_list **list) {
+void pid_list_delete(pid_list **list) {
 	pid_list *tmp;
 	while (*list != NULL) {
 		tmp = *list;

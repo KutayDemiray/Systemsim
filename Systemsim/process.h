@@ -79,7 +79,7 @@ static void *process_th(void *args) {
 			}
 
 			pcb->next_burst_len = next;
-		}
+		} 
 		
 		// "do" the burst by sleeping
 		if (cl->alg == ALG_RR && cl->q < pcb->remaining_burst_len) {

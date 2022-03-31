@@ -1,6 +1,8 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
+#include "pcb_queue.h"
+
 #define INITIAL_PROCESSES 10
 
 #define SEMNAME_MUTEX_SIM "/name_sem_mutex_sim"

@@ -49,57 +49,59 @@ typedef struct {
 	int outmode; // output mode
 } cl_args;
 
-void read_args(cl_args *cl, int argc, char **argv) {
+void read_args(cl_args **cl, int argc, char **argv) {
+	*cl = malloc(sizeof(cl_args));
+
 	if (strcmp(argv[1], "FCFS") == 0) {
-		cl->alg = ALG_FCFS;
+		(*cl)->alg = ALG_FCFS;
 	}
 	else if (strcmp(argv[1], "SJF") == 0) {
-		cl->alg = ALG_SJF;
+		(*cl)->alg = ALG_SJF;
 	}
 	else if (strcmp(argv[1], "RR") == 0) {
-		cl->alg = ALG_RR;
+		(*cl)->alg = ALG_RR;
 	}
 	else {
 		printf("Invalid algorithm arg\n");
 		exit(1);
 	}
 	
-	if (cl->alg == ALG_RR) {
-		cl->q = INF;
+	if ((*cl)->alg == ALG_RR) {
+		(*cl)->q = INF;
 	}
 	else {
-		cl->q = atoi(argv[2]);
+		(*cl)->q = atoi(argv[2]);
 	}
 	
-	cl->t1 = atoi(argv[3]);
-	cl->t2 = atoi(argv[4]);
+	(*cl)->t1 = atoi(argv[3]);
+	(*cl)->t2 = atoi(argv[4]);
 	
 	if (strcmp(argv[5], "fixed") == 0) {
-		cl->burst_dist = FIXED;
+		(*cl)->burst_dist = FIXED;
 	}
 	else if (strcmp(argv[5], "uniform") == 0) {
-		cl->burst_dist = UNIFORM;
+		(*cl)->burst_dist = UNIFORM;
 	}
 	else if (strcmp(argv[5], "exponential") == 0) {
-		cl->burst_dist = EXPONENTIAL;
+		(*cl)->burst_dist = EXPONENTIAL;
 	}
 	else {
 		printf("Invalid burst distribution arg\n");
 		exit(1);
 	}
 	
-	cl->burst_len = atoi(argv[6]);
-	cl->min_burst = atoi(argv[7]);
-	cl->max_burst = atoi(argv[8]);
+	(*cl)->burst_len = atoi(argv[6]);
+	(*cl)->min_burst = atoi(argv[7]);
+	(*cl)->max_burst = atoi(argv[8]);
 	
-	cl->p0 = atof(argv[9]);
-	cl->p1 = atof(argv[10]);
-	cl->p2 = atof(argv[11]);
-	cl->pg = atof(argv[12]);
+	(*cl)->p0 = atof(argv[9]);
+	(*cl)->p1 = atof(argv[10]);
+	(*cl)->p2 = atof(argv[11]);
+	(*cl)->pg = atof(argv[12]);
 	
-	cl->max_p = atoi(argv[13]);
-	cl->all_p = atoi(argv[14]);
-	cl->outmode = atoi(argv[15]);
+	(*cl)->max_p = atoi(argv[13]);
+	(*cl)->all_p = atoi(argv[14]);
+	(*cl)->outmode = atoi(argv[15]);
 }
 
 #endif
