@@ -37,6 +37,9 @@ int should_schedule = 0;
 pid_list *pids; // tracks available pid's
 process_arg pargs;
 
+pcd *arr; //array to print out the results 
+
+
 // process generator thread (only one will be created)
 static void *process_generator(void *args) {
 	if (cl->outmode >= OUTMODE_VERBOSE) {
@@ -227,6 +230,8 @@ void sim_init() {
 	}
 	
 	tids = malloc(cl->all_p * sizeof(pthread_t));
+	arr = malloc(cl->all_p * sizeof(pcb));
+
 
 	// semaphores
 	//sem_unlink(SEMNAME_MUTEX_SIM);

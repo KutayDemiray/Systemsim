@@ -31,6 +31,8 @@ typedef struct pcb {
 	int start_time;
 	int finish_time;
 	int total_time;
+	int n1;
+	int n2;
 } pcb;
 
 pcb *pcb_create(int p_id, int state, int start_time, int burst_dist, int burst_len, int min_burst, int max_burst) {
@@ -63,6 +65,8 @@ pcb *pcb_create(int p_id, int state, int start_time, int burst_dist, int burst_l
 	newpcb->start_time = start_time;
 	newpcb->finish_time = -1;
 	newpcb->total_time = 0;
+	newpcb->n1 = 0;
+	newpcb->n2 = 0;
 	return newpcb;
 }
 

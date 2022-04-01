@@ -136,6 +136,7 @@ static void *process_th(void *args) {
 				printf("%ld: RR Process %d bursts for %d ms\n", dif, pcb->p_id, cl->q);
 			}
 			
+
 			pthread_mutex_unlock(mutex_sim);
 			usleep(cl->q * 1000);
 			pthread_mutex_lock(mutex_sim);
@@ -144,7 +145,11 @@ static void *process_th(void *args) {
 			pcb->remaining_burst_len -= cl->q;
 			pcb->total_time += cl->q;
 			pcb->state = PCB_READY;
+<<<<<<< Updated upstream
 			//enqueue(cpu->rq, pcb);
+=======
+			pcb->bursts_completed ++;
+>>>>>>> Stashed changes
 			
 			if (cl->outmode >= OUTMODE_VERBOSE){
 				struct timeval now;
@@ -176,6 +181,7 @@ static void *process_th(void *args) {
 			cpu->cur = NULL;
 			pcb->total_time += pcb->remaining_burst_len;
 			pcb->remaining_burst_len = 0;
+			pcb->bursts_completed ++;
 			//pcb->state = PCB_READY;
 
 			// deal with i/o if needed
@@ -188,11 +194,13 @@ static void *process_th(void *args) {
 					dev = dev1;
 					duration = cl->t1;
 					device_no = 1;
+					pcb->n1++;
 				}
 				else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
 					dev = dev2;
 					duration = cl->t2;
 					device_no = 2;
+					pcb->n2++;
 				}
 				
 				pthread_mutex_unlock(mutex_sim);
@@ -214,6 +222,7 @@ static void *process_th(void *args) {
 					long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
 					printf("%ld: Process %d using device %d\n", dif, pcb->p_id, device_no);
 				}
+				
 				
 				pthread_mutex_unlock(&(dev->mutex));
 				usleep(duration * 1000);
