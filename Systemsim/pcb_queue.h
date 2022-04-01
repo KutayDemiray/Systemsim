@@ -60,17 +60,20 @@ void enqueue_node(pcb_queue *queue, pcb *item) {
 	pcb_node *tmp = malloc(sizeof(pcb_node));
 	tmp->item = item;
 	
-	tmp->prev = queue->tail;
-	tmp->next = NULL;
+	//tmp->prev = queue->tail;
+	//tmp->next = NULL;
 	
+	tmp->next = queue->head;
+	tmp->prev = NULL;
 	if (queue->head == NULL) {
-		queue->head = tmp;
+		queue->tail = tmp;
 	}
 	else {
-		queue->tail->next = tmp;
+		queue->head->prev = tmp;
 	}
+	queue->head = tmp;
 	
-	queue->tail = tmp;
+	//queue->tail = tmp;
 }
 
 // dequeue mode
@@ -78,14 +81,16 @@ void enqueue_node(pcb_queue *queue, pcb *item) {
 #define MODE_PRIO 2
 
 pcb *dequeue_node(pcb_queue *queue, int mode) {
-	if (queue->head == NULL) {
+	if (queue->head == NULL || queue->tail == NULL) {
 		return NULL;
 	}
 	else if (mode == MODE_FIFO) {
 		pcb *rv = queue->tail->item;
 		pcb_node *tmp = queue->tail; 
 		queue->tail = queue->tail->prev;
-		queue->tail->next = NULL;
+		if (queue->tail != NULL) {
+			queue->tail->next = NULL;
+		}
 		free(tmp);
 		return rv;
 	}
@@ -144,7 +149,7 @@ void enqueue(ready_queue *rq, pcb *pcb) {
 }
 
 pcb *dequeue(ready_queue *rq) {
-	if (rq->queue.head != NULL)
+	if (rq->length > 0)
 		rq->length--;
 	return dequeue_node(&(rq->queue), rq->mode);
 }
