@@ -10,6 +10,7 @@
 cl_args *cl; // command line args
 
 struct timeval start_time; 
+void** returns;
 
 // hardware structs
 cpu *sim_cpu;
@@ -239,7 +240,7 @@ void sim_init() {
 	pcbs = malloc(cl->all_p * sizeof(pcb *));
 	//arr = malloc(cl->all_p * sizeof(pcb));
 	int i = 0;
-	
+	returns = malloc(cl->all_p*sizeof(void*));
 	/*
 	for (; i<cl->all_p; i++){
 		arr[i] = malloc(sizeof(pcb));
@@ -292,12 +293,17 @@ void sim_begin() {
 
 void sim_end() {
 	int i;
+	pcb* new;
 	for (i = 0; i < cl->all_p; i++) {
-		pthread_join(tids[i], NULL);
+		pthread_join(tids[i], &(returns[i]));
 	}
 	pthread_join(pgen, NULL); // TODO return may not be null (so that info can be carried etc.)
 	pthread_join(sched, NULL);
-	
+	printf("pid\tarv\tdept\tcpu\twaitr\tturna\tn-bursts\tn-d1\tn-d2\n");
+	for (i = 0; i< cl->all_p; i++){
+		new = (pcb*)returns[i];
+		printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n", new->p_id, new->start_time, new->finish_time, new->total_time, (new->finish_time-new->start_time-new->total_time), (new->finish_time-new->start_time),new->bursts_completed, new->n1, new->n2);
+	}
 	for (i = 0; i < cl->all_p; i++) {
 		free(pcbs[i]);
 	}

@@ -29,7 +29,7 @@ typedef struct {
 	int *cur;
 	int *total;
 } process_arg;
-
+pcb* ret;
 int totalreturns = 0;
 
 // simulated process as a thread (there may be many)
@@ -271,7 +271,11 @@ static void *process_th(void *args) {
 	
 	// frees
 	free(args);
-	//free(pcb);
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+	pcb->finish_time = dif;
+	pthread_exit(pcb);
 	
 	pthread_exit(NULL);
 }
