@@ -51,27 +51,28 @@ typedef struct pcb_queue {
 	pcb_node *tail;
 } pcb_queue;
 
-void pcb_queue_init(pcb_queue *queue) {
-	queue->head = NULL;
-	queue->tail = NULL;
+void pcb_queue_init(pcb_queue **queue) {
+	(*queue) = malloc(sizeof(pcb_queue));
+	(*queue)->head = NULL;
+	(*queue)->tail = NULL;
 }
 
-void enqueue_node(pcb_queue *queue, pcb *item) {
+void enqueue_node(pcb_queue **queue, pcb *item) {
 	pcb_node *tmp = malloc(sizeof(pcb_node));
 	tmp->item = item;
 	
 	//tmp->prev = queue->tail;
 	//tmp->next = NULL;
 	
-	tmp->next = queue->head;
+	tmp->next = (*queue)->head; 
 	tmp->prev = NULL;
-	if (queue->head == NULL) {
-		queue->tail = tmp;
+	if ((*queue)->head == NULL) {
+		(*queue)->tail = tmp;
 	}
 	else {
-		queue->head->prev = tmp;
+		(*queue)->head->prev = tmp;
 	}
-	queue->head = tmp;
+	(*queue)->head = tmp;
 	
 	//queue->tail = tmp;
 }
@@ -80,25 +81,25 @@ void enqueue_node(pcb_queue *queue, pcb *item) {
 #define MODE_FIFO 1
 #define MODE_PRIO 2
 
-pcb *dequeue_node(pcb_queue *queue, int mode) {
-	if (queue->head == NULL || queue->tail == NULL) {
+pcb *dequeue_node(pcb_queue **queue, int mode) {
+	if ((*queue)->head == NULL || (*queue)->tail == NULL) {
 		return NULL;
 	}
 	else if (mode == MODE_FIFO) {
-		pcb *rv = queue->tail->item;
-		pcb_node *tmp = queue->tail; 
-		queue->tail = queue->tail->prev;
-		if (queue->tail != NULL) {
-			queue->tail->next = NULL;
+		pcb *rv = (*queue)->tail->item;
+		pcb_node *tmp = (*queue)->tail; 
+		(*queue)->tail = (*queue)->tail->prev;
+		if ((*queue)->tail != NULL) {
+			(*queue)->tail->next = NULL;
 		}
 		free(tmp);
 		return rv;
 	}
 	else if (mode == MODE_PRIO) {
-		pcb *rv = queue->head->item;
+		pcb *rv = (*queue)->head->item;
 		pcb_node *cur, *tmp;
 		
-		for (cur = queue->head; cur != NULL; cur = tmp->next) {
+		for (cur = (*queue)->head; cur != NULL; cur = tmp->next) {
 			if (cur->item->next_burst_len < rv->next_burst_len) {
 				tmp = cur;
 				rv = cur->item;
@@ -128,7 +129,7 @@ typedef struct ready_queue {
 	pthread_cond_t cv;
 	int mode;
 	int length;
-	pcb_queue queue;
+	pcb_queue *queue;
 } ready_queue;
 
 void ready_queue_init(ready_queue **rq, int alg) {

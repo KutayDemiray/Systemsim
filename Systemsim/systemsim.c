@@ -51,17 +51,6 @@ static void *process_generator(void *args) {
 	// argumental variables for process creations
 	pthread_t tid;
 	
-	pargs.cl = cl;
-	pargs.cpu = sim_cpu;
-	pargs.dev1 = dev1;
-	pargs.dev2 = dev2;
-	pargs.cv_sch = &cv_sch;
-	pargs.mutex_sim = &mutex_sim;
-	pargs.pid_list = &pids;
-	pargs.start_time = start_time;
-	pargs.emptyprocs = sem_emptyprocs;
-	pargs.should_schedule = &should_schedule;
-	
 	pcb *newpcb;
 	// initial generation loop
 	
@@ -80,10 +69,21 @@ static void *process_generator(void *args) {
 		//enqueue(sim_cpu->rq, newpcb);
 
 		// 4. create process thread
-		// process_arg pargs; // done in the start of this method
-		pargs.pcb = newpcb;
+		process_arg *pargs = malloc(sizeof(process_arg)); // done in the start of this method
+		pargs->cl = cl;
+		pargs->cpu = sim_cpu;
+		pargs->dev1 = dev1;
+		pargs->dev2 = dev2;
+		pargs->cv_sch = &cv_sch;
+		pargs->mutex_sim = &mutex_sim;
+		pargs->pid_list = &pids;
+		pargs->start_time = start_time;
+		pargs->emptyprocs = sem_emptyprocs;
+		pargs->should_schedule = &should_schedule;
+		pargs->total = &total;
+		pargs->pcb = newpcb;
 		
-		pthread_create(&(newpcb->t_id), NULL, process_th, (void *) &pargs);
+		pthread_create(&(newpcb->t_id), NULL, process_th, (void *) pargs);
 		
 		if (cl->outmode >= OUTMODE_VERBOSE) {
 			printf("Process generated with pid %d (total: %d)\n", newpcb->p_id, total + 1);
@@ -117,16 +117,27 @@ static void *process_generator(void *args) {
 			long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
 			//newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
 			newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
-			
+			total++;
 			// 3. add new process to ready queue
 			//enqueue(sim_cpu->rq, newpcb);
-			total++;
 
 			// 4. create process thread
 			// process_arg pargs; // done in the start of this method
-			pargs.pcb = newpcb;
-			
-			pthread_create(&(newpcb->t_id), NULL, process_th, (void *) &pargs);
+			//pargs.pcb = newpcb;
+			process_arg *pargs = malloc(sizeof(process_arg));
+			pargs->cl = cl;
+			pargs->cpu = sim_cpu;
+			pargs->dev1 = dev1;
+			pargs->dev2 = dev2;
+			pargs->cv_sch = &cv_sch;
+			pargs->mutex_sim = &mutex_sim;
+			pargs->pid_list = &pids;
+			pargs->start_time = start_time;
+			pargs->emptyprocs = sem_emptyprocs;
+			pargs->should_schedule = &should_schedule;
+			pargs->total = &total;
+			pargs->pcb = newpcb;
+			pthread_create(&tid, NULL, process_th, (void *) pargs);
 			
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("%ld: Process generated with pid %d (total: %d)\n", dif, newpcb->p_id, total);
@@ -185,16 +196,17 @@ static void *cpu_scheduler(void *args) {
 		if (sim_cpu->rq->length > 0) {
 			
 			//sim_cpu->cur = dequeue(sim_cpu->rq);
-			sim_cpu->cur = sim_cpu->rq->queue.tail->item;
+			sim_cpu->cur = sim_cpu->rq->queue->tail->item;
 			sim_cpu->cur->state = PCB_RUNNING;
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("Scheduler runs %d (current: %d)\n", sim_cpu->cur->p_id, sim_cpu->rq->length);
 			}
 			// wake up all processes (including selected) with broadcast
+			should_schedule = 0;
 			pthread_cond_broadcast(&(sim_cpu->rq->cv));
 		}
 		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
-		should_schedule = 0;
+		//should_schedule = 0;
 		
 		// selected thread enters the cpu (TODO maybe already done above?)
 		pthread_mutex_unlock(&mutex_sim);
