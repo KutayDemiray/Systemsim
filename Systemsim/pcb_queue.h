@@ -92,8 +92,11 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 		if ((*queue)->tail != NULL) {
 			(*queue)->tail->next = NULL;
 		}
+		else {
+			(*queue)->head = NULL;
+		}
 		free(tmp);
-		printf("dequeue_node() -> %d\n", rv->p_id);
+		printf("dequeue_node() -> %d done\n", rv->p_id);
 		return rv;
 	}
 	else if (mode == MODE_PRIO) {
