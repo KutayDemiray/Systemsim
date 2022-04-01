@@ -130,7 +130,7 @@ static void *process_th(void *args) {
 			//dequeue(cpu->rq);
 			
 			if (cl->outmode >= OUTMODE_VERBOSE) {
-				printf("Process %d bursts for %d ms\n", pcb->p_id, cl->q);
+				printf("RR Process %d bursts for %d ms\n", pcb->p_id, cl->q);
 			}
 			
 			pthread_mutex_unlock(mutex_sim);

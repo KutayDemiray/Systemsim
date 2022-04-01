@@ -66,7 +66,7 @@ void read_args(cl_args **cl, int argc, char **argv) {
 		exit(1);
 	}
 	
-	if ((*cl)->alg == ALG_RR) {
+	if ((*cl)->alg != ALG_RR) {
 		(*cl)->q = INF;
 	}
 	else {
