@@ -37,7 +37,7 @@ int should_schedule = 0;
 pid_list *pids; // tracks available pid's
 process_arg pargs;
 
-pcd *arr; //array to print out the results 
+pcb *arr; //array to print out the results 
 
 
 // process generator thread (only one will be created)
@@ -231,6 +231,11 @@ void sim_init() {
 	
 	tids = malloc(cl->all_p * sizeof(pthread_t));
 	arr = malloc(cl->all_p * sizeof(pcb));
+	int i = 0;
+	
+	for (; i<cl->all_p; i++){
+		arr[i] = malloc(sizeof(pcb));
+	}
 
 
 	// semaphores
