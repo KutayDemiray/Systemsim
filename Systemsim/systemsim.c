@@ -52,7 +52,7 @@ static void *process_generator(void *args) {
 
 	// random number generator init
 	time_t t;
-	srand((unsigned) time(&t));
+	srand((unsigned) time(&t)); 
 	
 	struct timeval now; // for time calculations
 	// argumental variables for process creations
@@ -303,12 +303,14 @@ void sim_end() {
 	for (i = 0; i< cl->all_p; i++){
 		new = (pcb*)returns[i];
 		printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n", new->p_id, new->start_time, new->finish_time, new->total_time, (new->finish_time-new->start_time-new->total_time), (new->finish_time-new->start_time),new->bursts_completed, new->n1, new->n2);
+		free(returns[i]);
 	}
 	for (i = 0; i < cl->all_p; i++) {
 		free(pcbs[i]);
 	}
 	free(pcbs);
 	
+	free(returns);
 	//printf("pid\tarv\tdept\tcpu\twaitr\tturna\tn-bursts\tn-d1\tn-d2");
 	
 	// frees
