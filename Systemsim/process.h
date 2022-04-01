@@ -24,8 +24,9 @@ typedef struct {
 	pthread_mutex_t *mutex_sim; // shared
 	pid_list **pid_list; // shared
 	struct timeval start_time;
-	sem_t *emptyprocs;
+	//sem_t *emptyprocs;
 	int *should_schedule;
+	int *cur;
 	int *total;
 } process_arg;
 
@@ -39,9 +40,11 @@ static void *process_th(void *args) {
 	io_device *dev1 = ((process_arg *) args)->dev1;
 	io_device *dev2 = ((process_arg *) args)->dev2;
 	pid_list **pids = ((process_arg *) args)->pid_list; 
-	struct timeval start_time = ((process_arg *) args)->start_time; 
-	int *total = ((process_arg *) args)->total; 
+	struct timeval start_time = ((process_arg *) args)->start_time;
+	int *cur = ((process_arg *) args)->cur; 
+	//int *total = ((process_arg *) args)->total; 
 	pcb *pcb = ((process_arg *) args)->pcb;
+	(*cur)++;
 	
 	/*
 	struct timeval now;	
@@ -50,7 +53,7 @@ static void *process_th(void *args) {
 	pcb *pcb = pcb_create((*total)++, PCB_READY, dif);
 	*/
 	pthread_cond_t *cv_sch = ((process_arg *) args)->cv_sch;
-	pthread_cond_t cv_rq = ((process_arg *) args)->cpu->rq->cv;
+	//pthread_cond_t cv_rq = ((process_arg *) args)->cpu->rq->cv;
 	
 	cl_args* cl = ((process_arg *) args)->cl;
 	//struct timeval start_time = ((process_arg *) args)->start_time;
@@ -159,7 +162,9 @@ static void *process_th(void *args) {
 				printf("Process %d bursts for %d ms\n", pcb->p_id, pcb->remaining_burst_len);
 			}
 			
+			pthread_mutex_unlock(mutex_sim);
 			usleep(pcb->remaining_burst_len * 1000);
+			pthread_mutex_lock(mutex_sim);
 			
 			cpu->cur = NULL;
 			pcb->total_time += pcb->remaining_burst_len;
@@ -183,7 +188,7 @@ static void *process_th(void *args) {
 					device_no = 2;
 				}
 				
-				//pthread_mutex_unlock(mutex_sim);
+				pthread_mutex_unlock(mutex_sim);
 				pthread_mutex_lock(&(dev->mutex));
 				//while (dev->cur != NULL && dev->cur->p_id != pcb->p_id) {
 				while (dev->cur != NULL) {
@@ -205,7 +210,9 @@ static void *process_th(void *args) {
 					printf("Process %d using device %d\n", pcb->p_id, device_no);
 				}
 				
+				pthread_mutex_unlock(&(dev->mutex));
 				usleep(duration * 1000);
+				pthread_mutex_lock(&(dev->mutex));
 				
 				if (cl->outmode >= OUTMODE_VERBOSE) {
 					struct timeval now;
@@ -218,15 +225,10 @@ static void *process_th(void *args) {
 				dev->cur = NULL;
 				dev->count--;
 				
+				(*should_schedule) = 1;
 				pthread_cond_broadcast(&(dev->cv));
-				
-				/*
-				while (!(*should_schedule)) {
-					pthread_cond_wait(cv_proc);
-				}
-				*/
 				pthread_mutex_unlock(&(dev->mutex));
-				//pthread_mutex_lock(mutex_sim);
+				pthread_mutex_lock(mutex_sim);
 				
 				
 			}
@@ -239,11 +241,10 @@ static void *process_th(void *args) {
 			(*should_schedule) = 1;
 			pthread_cond_signal(cv_sch); // wake up scheduler (case 4)
 		}
-			
-		//}
 		
 		pcb->state = PCB_READY;
-		printf("==============================\n");
+		if (p > cl->p0) 
+			printf("==============================\n");
 		pthread_mutex_unlock(mutex_sim);
 	} while (p > cl->p0);
 	
@@ -252,10 +253,16 @@ static void *process_th(void *args) {
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("Process %d terminated (total returns: %d)\n", pcb->p_id, ++totalreturns);
+		printf("==============================\n");
 	}
-	return_pid(((process_arg *) args)->pid_list, pcb->p_id);
+	(*cur)--;
+	return_pid(pids, pcb->p_id);
 	//sem_post(((process_arg *) args)->emptyprocs);
 	pthread_mutex_unlock(mutex_sim);
+	
+	// frees
+	free(args);
+	free(pcb);
 	
 	pthread_exit(NULL);
 }

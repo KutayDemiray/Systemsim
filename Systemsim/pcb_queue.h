@@ -16,6 +16,10 @@
 #define PCB_WAITING 2
 #define PCB_READY 3
 
+// dequeue mode
+#define MODE_FIFO 1
+#define MODE_PRIO 2 
+
 typedef struct pcb {
 	int p_id;
 	int state;
@@ -77,10 +81,6 @@ void enqueue_node(pcb_queue **queue, pcb *item) {
 	//queue->tail = tmp;
 }
 
-// dequeue mode
-#define MODE_FIFO 1
-#define MODE_PRIO 2
-
 pcb *dequeue_node(pcb_queue **queue, int mode) {
 	/*if ((*queue)->head == NULL || (*queue)->tail == NULL) {
 		return NULL;
@@ -119,6 +119,14 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 	}
 }
 
+void pcb_queue_delete(pcb_queue *q) {
+	while (q->tail != NULL) {
+		free(dequeue_node(&q, MODE_FIFO));
+	}
+	free(q);
+	
+}
+
 pcb *get_pcb(pcb_queue *queue, pthread_t tid){
 	pcb_node* tmp = queue->head;
 	for (; tmp != NULL; tmp = tmp->next){
@@ -145,6 +153,12 @@ void ready_queue_init(ready_queue **rq, int alg) {
 	(*rq)->mode = alg == ALG_SJF ? MODE_PRIO : MODE_FIFO; // PRIO or FIFO
 }
 
+void ready_queue_delete(ready_queue *rq) {
+	pthread_cond_destroy(&(rq->cv));
+	pcb_queue_delete(rq->queue);
+	free(rq);
+}
+
 void enqueue(ready_queue *rq, pcb *pcb) {
 	if (pcb->state != PCB_READY) {
 		printf("Cannot enqueue a process that's not ready to the ready queue\n"); // "ready" queue should only have ready processes
@@ -155,7 +169,6 @@ void enqueue(ready_queue *rq, pcb *pcb) {
 }
 
 pcb *dequeue(ready_queue *rq) {
-	printf("dequeue()\n");
 	if (rq->length > 0)
 		rq->length--;
 	return dequeue_node(&(rq->queue), rq->mode);

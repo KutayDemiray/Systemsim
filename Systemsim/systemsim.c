@@ -17,11 +17,13 @@ cpu *sim_cpu;
 io_device *dev1;
 io_device *dev2;
 
+pthread_t *tids;
+
 // mutex for process generator and cpu scheduler threads
 pthread_mutex_t mutex_sim; // controls access to many simulation resources/structs (essentially most global variables in this file)
 
-sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
-sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
+//sem_t *sem_fullprocs; // current open processes in the system (between 0 and max_p)
+//sem_t *sem_emptyprocs; // current available slots for processes (= max_p - fullprocs)
 
 pthread_cond_t cv_sch; // scheduler cv
 
@@ -62,8 +64,8 @@ static void *process_generator(void *args) {
 		// 2. create PCB for new process
 		gettimeofday(&now, NULL);
 		long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
-		//newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
-		newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
+		newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
+		//newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
 		
 		// 3. add new process to ready queue
 		//enqueue(sim_cpu->rq, newpcb);
@@ -78,12 +80,13 @@ static void *process_generator(void *args) {
 		pargs->mutex_sim = &mutex_sim;
 		pargs->pid_list = &pids;
 		pargs->start_time = start_time;
-		pargs->emptyprocs = sem_emptyprocs;
+		//pargs->emptyprocs = sem_emptyprocs;
 		pargs->should_schedule = &should_schedule;
+		pargs->cur = &cur;
 		pargs->total = &total;
 		pargs->pcb = newpcb;
 		
-		pthread_create(&(newpcb->t_id), NULL, process_th, (void *) pargs);
+		pthread_create(&(tids[total]), NULL, process_th, (void *) pargs);
 		
 		if (cl->outmode >= OUTMODE_VERBOSE) {
 			printf("Process generated with pid %d (total: %d)\n", newpcb->p_id, total + 1);
@@ -103,12 +106,12 @@ static void *process_generator(void *args) {
 	
 	// process generation loop
 	printf("generate others\n");
-	while (total < cl->all_p || cur != 0) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
+	while (total < cl->all_p) { // simulation ends when (ALL_P) processes are generated and all of them leave the system
 		// sleep for 5 ms
 		usleep(5000);
 		// generate process
 		pthread_mutex_lock(&mutex_sim);
-		if (total < cl->all_p && (double) rand() / (double) RAND_MAX < cl->pg) {
+		if (cur < cl->max_p && total < cl->all_p && (double) rand() / (double) RAND_MAX < cl->pg) {
 			// 1. wait until less than max_p processes exist in the system
 			//sem_wait(sem_emptyprocs);
 			
@@ -116,8 +119,8 @@ static void *process_generator(void *args) {
 			// 2. create PCB for new process
 			gettimeofday(&now, NULL);
 			long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
-			//newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
-			newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
+			newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
+			//newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
 			total++;
 			// 3. add new process to ready queue
 			//enqueue(sim_cpu->rq, newpcb);
@@ -134,11 +137,12 @@ static void *process_generator(void *args) {
 			pargs->mutex_sim = &mutex_sim;
 			pargs->pid_list = &pids;
 			pargs->start_time = start_time;
-			pargs->emptyprocs = sem_emptyprocs;
+			//pargs->emptyprocs = sem_emptyprocs;
 			pargs->should_schedule = &should_schedule;
+			pargs->cur = &cur;
 			pargs->total = &total;
 			pargs->pcb = newpcb;
-			pthread_create(&tid, NULL, process_th, (void *) pargs);
+			pthread_create(&(tids[total - 1]), NULL, process_th, (void *) pargs);
 			
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("%ld: Process generated with pid %d (total: %d)\n", dif, newpcb->p_id, total);
@@ -173,7 +177,7 @@ static void *cpu_scheduler(void *args) {
 	}
 
 	// should keep running until ready queue is empty and no more processes will arrive (process_generator is terminated)
-	while (!pgen_done || sim_cpu->rq->length > 0) { 
+	while (!pgen_done || cur > 0) { 
 		pthread_mutex_lock(&mutex_sim);
 	
 		// while not running, sleep on cv
@@ -223,15 +227,17 @@ void sim_init() {
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("sim_init() start\n");
 	}
+	
+	tids = malloc(cl->all_p * sizeof(pthread_t));
 
 	// semaphores
 	//sem_unlink(SEMNAME_MUTEX_SIM);
-	sem_unlink(SEMNAME_FULLPROCS);
-	sem_unlink(SEMNAME_EMPTYPROCS);
+	//sem_unlink(SEMNAME_FULLPROCS);
+	//sem_unlink(SEMNAME_EMPTYPROCS);
 	
 	//sem_mutex_sim = sem_open(SEMNAME_MUTEX_SIM, O_RDWR | O_CREAT, 0660, 1);
-	sem_fullprocs = sem_open(SEMNAME_FULLPROCS, O_RDWR | O_CREAT, 0660, 0);
-	sem_emptyprocs = sem_open(SEMNAME_EMPTYPROCS, O_RDWR | O_CREAT, 0660, cl->max_p);
+	//sem_fullprocs = sem_open(SEMNAME_FULLPROCS, O_RDWR | O_CREAT, 0660, 0);
+	//sem_emptyprocs = sem_open(SEMNAME_EMPTYPROCS, O_RDWR | O_CREAT, 0660, cl->max_p);
 	
 	// conditional variables
 	pthread_cond_init(&cv_sch, NULL);
@@ -269,13 +275,24 @@ void sim_begin() {
 }
 
 void sim_end() {
-	//pthread_join(pgen, NULL); // TODO return may not be null (so that info can be carried etc.)
+	int i;
+	for (i = 0; i < cl->all_p; i++) {
+		pthread_join(tids[i], NULL);
+	}
+	pthread_join(pgen, NULL); // TODO return may not be null (so that info can be carried etc.)
 	pthread_join(sched, NULL);
 	
 	printf("pid\tarv\tdept\tcpu\twaitr\tturna\tn-bursts\tn-d1\tn-d2");
 	
 	// frees
 	pid_list_delete(&pids);
+	cpu_delete(sim_cpu);
+	io_device_delete(dev1);
+	io_device_delete(dev2);
+	free(cl);
+	free(tids);
+	pthread_mutex_destroy(&mutex_sim);
+	pthread_cond_destroy(&cv_sch);
 }
 
 int main(int argc, char **argv) {

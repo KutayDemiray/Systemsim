@@ -20,6 +20,14 @@ void cpu_init(cpu **sim_cpu, int alg) {
 	(*sim_cpu)->cur = NULL;
 }
 
+void cpu_delete(cpu *sim_cpu) {
+	ready_queue_delete(sim_cpu->rq);
+	if (sim_cpu->cur != NULL) {
+		free(sim_cpu->cur);
+	}
+	free(sim_cpu);
+}
+
 typedef struct io_device {
 	int count;
 	pcb *cur;
@@ -33,6 +41,15 @@ void io_device_init(io_device **dev) {
 	pthread_cond_init(&((*dev)->cv), NULL);
 	pthread_mutex_init(&((*dev)->mutex), NULL);
 	(*dev)->cur = NULL;
+}
+
+void io_device_delete(io_device *dev) {
+	if (dev->cur != NULL) {
+		free(dev->cur);
+	}
+	pthread_cond_destroy(&(dev->cv));
+	pthread_mutex_destroy(&(dev->mutex));
+	free(dev);
 }
 
 #endif
