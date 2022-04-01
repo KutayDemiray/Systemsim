@@ -82,10 +82,10 @@ void enqueue_node(pcb_queue **queue, pcb *item) {
 #define MODE_PRIO 2
 
 pcb *dequeue_node(pcb_queue **queue, int mode) {
-	if ((*queue)->head == NULL || (*queue)->tail == NULL) {
+	/*if ((*queue)->head == NULL || (*queue)->tail == NULL) {
 		return NULL;
 	}
-	else if (mode == MODE_FIFO) {
+	else */if (mode == MODE_FIFO) {
 		pcb *rv = (*queue)->tail->item;
 		pcb_node *tmp = (*queue)->tail; 
 		(*queue)->tail = (*queue)->tail->prev;
@@ -93,6 +93,7 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 			(*queue)->tail->next = NULL;
 		}
 		free(tmp);
+		printf("dequeue_node() -> %d\n", rv->p_id);
 		return rv;
 	}
 	else if (mode == MODE_PRIO) {
@@ -107,6 +108,7 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 		}
 		
 		free(tmp);
+		printf("dequeue_node() -> %d\n", rv->p_id);
 		return rv;
 	}
 	else {
@@ -150,6 +152,7 @@ void enqueue(ready_queue *rq, pcb *pcb) {
 }
 
 pcb *dequeue(ready_queue *rq) {
+	printf("dequeue()\n");
 	if (rq->length > 0)
 		rq->length--;
 	return dequeue_node(&(rq->queue), rq->mode);

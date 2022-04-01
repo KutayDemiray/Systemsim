@@ -35,7 +35,6 @@ int totalreturns = 0;
 static void *process_th(void *args) {
 	// read args
 	pthread_mutex_t *mutex_sim = ((process_arg *) args)->mutex_sim;
-	pthread_mutex_lock(mutex_sim);
 	cpu *cpu = ((process_arg *) args)->cpu;
 	io_device *dev1 = ((process_arg *) args)->dev1;
 	io_device *dev2 = ((process_arg *) args)->dev2;
@@ -62,6 +61,7 @@ static void *process_th(void *args) {
 	
 	double p;
 	
+	pthread_mutex_lock(mutex_sim);
 	pcb->state = PCB_READY;
 	enqueue(cpu->rq, pcb);
 	*should_schedule = 1; // case 1
@@ -82,8 +82,9 @@ static void *process_th(void *args) {
 		// so all processes should check whether they're the running process or not when they are awake
 		//while (cpu->cur != NULL && cpu->cur->p_id != pcb->p_id) {
 		while (pcb->state != PCB_RUNNING) {
-			pthread_cond_wait(&cv_rq, mutex_sim);
+			pthread_cond_wait(&(cpu->rq->cv), mutex_sim);
 		}
+		dequeue(cpu->rq);
 		
 		// 2. calculate next burst length if necessary
 		
@@ -119,7 +120,7 @@ static void *process_th(void *args) {
 		
 		
 		// 3. "do" the burst by sleeping
-		dequeue(cpu->rq);
+		
 		cpu->cur = pcb;
 		pcb->state = PCB_RUNNING;
 		if ((cl->alg == ALG_RR) && (cl->q < pcb->remaining_burst_len)) {
@@ -128,9 +129,11 @@ static void *process_th(void *args) {
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("Process %d bursts for %d ms\n", pcb->p_id, cl->q);
 			}
-
+			
+			pthread_mutex_unlock(mutex_sim);
 			usleep(cl->q * 1000);
-
+			pthread_mutex_lock(mutex_sim);
+			
 			cpu->cur = NULL;
 			pcb->remaining_burst_len -= cl->q;
 			pcb->total_time += cl->q;
@@ -139,7 +142,7 @@ static void *process_th(void *args) {
 			if (cl->outmode >= OUTMODE_VERBOSE){
 				struct timeval now;
 				gettimeofday(&now, NULL);
-				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+				long int dif = (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
 				printf("%ld\t%d\t", dif, pcb->p_id);
 				switch (pcb->state) {
 					case PCB_RUNNING: printf("RUNNING\n"); break;
@@ -204,6 +207,14 @@ static void *process_th(void *args) {
 				
 				usleep(duration * 1000);
 				
+				if (cl->outmode >= OUTMODE_VERBOSE) {
+					struct timeval now;
+					gettimeofday(&now, NULL);
+					long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+					printf("%ld\t", dif);
+					printf("%d\t", pcb->p_id);
+					printf("Process %d finished using device %d\n", pcb->p_id, device_no);
+				}
 				dev->cur = NULL;
 				dev->count--;
 				
@@ -232,6 +243,7 @@ static void *process_th(void *args) {
 		//}
 		
 		pcb->state = PCB_READY;
+		printf("==============================\n");
 		pthread_mutex_unlock(mutex_sim);
 	} while (p > cl->p0);
 	

@@ -87,6 +87,7 @@ static void *process_generator(void *args) {
 		
 		if (cl->outmode >= OUTMODE_VERBOSE) {
 			printf("Process generated with pid %d (total: %d)\n", newpcb->p_id, total + 1);
+			printf("===========================================\n");
 		}
 		
 		// 5. alert scheduler (case 5)
@@ -202,11 +203,11 @@ static void *cpu_scheduler(void *args) {
 				printf("Scheduler runs %d (current: %d)\n", sim_cpu->cur->p_id, sim_cpu->rq->length);
 			}
 			// wake up all processes (including selected) with broadcast
-			should_schedule = 0;
+			//should_schedule = 0;
 			pthread_cond_broadcast(&(sim_cpu->rq->cv));
 		}
 		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
-		//should_schedule = 0;
+		should_schedule = 0;
 		
 		// selected thread enters the cpu (TODO maybe already done above?)
 		pthread_mutex_unlock(&mutex_sim);
