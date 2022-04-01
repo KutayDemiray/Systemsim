@@ -30,6 +30,7 @@ pthread_t sched; // scheduler
 
 int pgen_done = 0; // set to 1 when process generator finishes
 int cur = 0; // all processes that haven't finished yet
+int should_schedule = 0;
 
 pid_list *pids; // tracks available pid's
 process_arg pargs;
@@ -59,14 +60,15 @@ static void *process_generator(void *args) {
 	pargs.pid_list = &pids;
 	pargs.start_time = start_time;
 	pargs.emptyprocs = sem_emptyprocs;
+	pargs.should_schedule = &should_schedule;
 	
 	pcb *newpcb;
 	// initial generation loop
-	/*
+	
 	pthread_mutex_lock(&mutex_sim);
 	for (total = 0; total < INITIAL_PROCESSES; total++) {
 		// 1. wait until less than max_p processes exist in the system
-		sem_wait(sem_emptyprocs);
+		//sem_wait(sem_emptyprocs);
 		
 		// 2. create PCB for new process
 		gettimeofday(&now, NULL);
@@ -87,13 +89,15 @@ static void *process_generator(void *args) {
 		}
 		
 		// 5. alert scheduler (case 5)
-		pthread_cond_signal(&cv_sch);
+		
 	}
+	
+	pthread_cond_signal(&cv_sch);
 	pthread_mutex_unlock(&mutex_sim);
 
 	//sem_getvalue(sem_fullprocs, &cur);
 	//pthread_mutex_unlock(&mutex_sim);
-	*/
+	
 	
 	// process generation loop
 	printf("generate others\n");
@@ -113,13 +117,15 @@ static void *process_generator(void *args) {
 			
 			// 3. add new process to ready queue
 			enqueue(sim_cpu->rq, newpcb);
+			should_schedule = 1;
 			total++;
 
 			// 4. create process thread
 			// process_arg pargs; // done in the start of this method
 			pargs.pcb = newpcb;
 			
-			pthread_create(&tid, NULL, process_th, (void *) &pargs);
+			pthread_create(&(newpcb->t_id), NULL, process_th, (void *) &pargs);
+			
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("Process generated with pid %d (total: %d)\n", newpcb->p_id, total);
 			}
@@ -133,6 +139,7 @@ static void *process_generator(void *args) {
 		
 		//sem_getvalue(sem_fullprocs, &cur);
 	}
+	pthread_mutex_unlock(&mutex_sim);
 	
 	pthread_mutex_lock(&mutex_sim);
 	pgen_done = 1;
@@ -163,25 +170,31 @@ static void *cpu_scheduler(void *args) {
 			// 5. a new process is created and is added to the ready queue
 		// signals for above cases are sent from elsewhere
 		
-		while (sim_cpu->cur != NULL) { // TODO other conds?
+		//while (!should_schedule) { // TODO other conds?
+		while (sim_cpu->cur != NULL || !should_schedule) {
 			pthread_cond_wait(&cv_sch, &mutex_sim);
 		}
 		
 		// when waken up
-		
+		if (cl->outmode >= OUTMODE_VERBOSE) {
+			printf("scheduler runs\n");
+		}
 		// TODO check if scheduling needed
 		
 		// if so, select process from ready queue
 		if (sim_cpu->rq->length > 0) {
+			
 			sim_cpu->cur = dequeue(sim_cpu->rq);
-		
+			if (cl->outmode >= OUTMODE_VERBOSE) {
+				printf("scheduler runs %d\n", sim_cpu->cur->p_id);
+			}
 			// wake up all processes (including selected) with broadcast
 			pthread_cond_broadcast(&cv_sch);
 		}
 		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
 		
 		// selected thread enters the cpu (TODO maybe already done above?)
-		
+		should_schedule--;
 		pthread_mutex_unlock(&mutex_sim);
 	}
 	

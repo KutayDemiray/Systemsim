@@ -25,6 +25,7 @@ typedef struct {
 	pid_list **pid_list; // shared
 	struct timeval start_time;
 	sem_t *emptyprocs;
+	int *should_schedule;
 } process_arg;
 
 int totalreturns = 0;
@@ -41,6 +42,7 @@ static void *process_th(void *args) {
 	pthread_mutex_t *mutex_sim = ((process_arg *) args)->mutex_sim;
 	cl_args* cl = ((process_arg *) args)->cl;
 	struct timeval start_time = ((process_arg *) args)->start_time;
+	int *should_schedule = ((process_arg *) args)->should_schedule;
 	
 	time_t t;
 	srand((unsigned) time(&t));
@@ -59,6 +61,10 @@ static void *process_th(void *args) {
 		// determine whether the process will i/o with a device or terminate after this burst
 		int tmp = rand();
 		p = ((double) (tmp % 1000)) / 1000.0;
+		
+		if (p < cl->p0) {// terminate
+			break;
+		}
 		
 		// determine next cpu burst length
 		int burstwidth = cl->max_burst - cl->min_burst;
@@ -87,7 +93,11 @@ static void *process_th(void *args) {
 		if (cl->alg == ALG_RR && cl->q < pcb->remaining_burst_len) {
 			pcb->state = PCB_RUNNING;
 			//dequeue(cpu->rq);
+			
+			//pthread_mutex_unlock(mutex_sim);
 			usleep(cl->q * 1000);
+			//pthread_mutex_lock(mutex_sim);
+			cpu->cur = NULL;
 			pcb->remaining_burst_len -= cl->q;
 			pcb->total_time += cl->q;
 			pcb->state = PCB_READY;
@@ -104,14 +114,21 @@ static void *process_th(void *args) {
 					case PCB_READY: printf("READY\n"); break;
 				}
 			}
-
+			
+			(*should_schedule)++;
 			pthread_cond_signal(cv_sch); // wake up scheduler (case 3)
 			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
 		}
 		else {
+			pcb->state = PCB_RUNNING;
+			
+			//pthread_mutex_unlock(mutex_sim);
 			usleep(pcb->remaining_burst_len * 1000);
+			//pthread_mutex_lock(mutex_sim);
+			cpu->cur = NULL;
 			pcb->total_time += pcb->remaining_burst_len;
 			pcb->remaining_burst_len = 0;
+			pcb->state = PCB_READY;
 
 			// deal with i/o if needed
 			if (p > cl->p0) {
@@ -128,6 +145,8 @@ static void *process_th(void *args) {
 					duration = cl->t2;
 					device_no = 2;
 				}
+				
+				pthread_mutex_unlock(mutex_sim);
 				pthread_mutex_lock(&(dev->mutex));
 				pcb->state = PCB_WAITING;
 				
@@ -135,6 +154,7 @@ static void *process_th(void *args) {
 				while (dev->cur != NULL && dev->cur->p_id != pcb->p_id) {
 					pthread_cond_wait(&(dev->cv), &(dev->mutex)); 
 				}
+				(*should_schedule)++;
 				pthread_cond_signal(cv_sch); // wake up scheduler (case 2)
 				
 				dev->cur = pcb;
@@ -157,24 +177,33 @@ static void *process_th(void *args) {
 				
 				pthread_cond_broadcast(&(dev->cv));
 				
-				
 				pcb->state = PCB_READY;
 				enqueue(cpu->rq, pcb);
+				(*should_schedule)++;
 				pthread_cond_signal(cv_sch); // wake up scheduler (case 4)
+				/*
+				while (!(*should_schedule)) {
+					pthread_cond_wait(cv_proc);
+				}
+				*/
 				pthread_mutex_unlock(&(dev->mutex));
+				pthread_mutex_lock(mutex_sim);
 			}
+			
+			enqueue(cpu->rq, pcb);
 		}
 		
 		pthread_mutex_unlock(mutex_sim);
 	} while (p > cl->p0);
 	
 	pthread_mutex_lock(mutex_sim);
+	//(*should_schedule) = 1;
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("Process %d terminated (total returns: %d)\n", pcb->p_id, ++totalreturns);
 	}
 	return_pid(((process_arg *) args)->pid_list, pcb->p_id);
-	sem_post(((process_arg *) args)->emptyprocs);
+	//sem_post(((process_arg *) args)->emptyprocs);
 	pthread_mutex_unlock(mutex_sim);
 	
 	pthread_exit(NULL);
