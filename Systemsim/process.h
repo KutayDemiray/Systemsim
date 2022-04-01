@@ -145,11 +145,15 @@ static void *process_th(void *args) {
 			pcb->remaining_burst_len -= cl->q;
 			pcb->total_time += cl->q;
 			pcb->state = PCB_READY;
+<<<<<<< Updated upstream
 
 			//enqueue(cpu->rq, pcb);
 
 			pcb->bursts_completed ++;
 
+=======
+			pcb->bursts_completed ++;
+>>>>>>> Stashed changes
 			
 			if (cl->outmode >= OUTMODE_VERBOSE){
 				struct timeval now;
