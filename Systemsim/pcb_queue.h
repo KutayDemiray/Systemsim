@@ -128,7 +128,7 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 	else if (mode == MODE_PRIO) {
 		pcb *rv = (*queue)->head->item;
 		pcb_node *cur;
-		pcb_node *tmp = NULL;
+		pcb_node *tmp = (*queue)->head;
 		
 		for (cur = (*queue)->head; cur != NULL; cur = cur->next) {
 			if (cur->item->next_burst_len < rv->next_burst_len) {
@@ -137,11 +137,19 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 			}
 		}
 		
-		if (tmp != NULL && tmp->prev != NULL) {
-			tmp->prev->next = tmp->next;
+		if (tmp == (*queue)->head) {
+			(*queue)->head = (*queue)->head->next;
+			//(*queue)->head->prev = NULL;
 		}
-		if (tmp != NULL && tmp->next != NULL) {
+		if (tmp == (*queue)->tail) {
+			(*queue)->tail = (*queue)->tail->prev;
+		}
+		
+		if (tmp->next != NULL) {
 			tmp->next->prev = tmp->prev;
+		}
+		if (tmp->prev != NULL) {
+			tmp->prev->next = tmp->next;
 		}
 		
 		free(tmp);
@@ -169,11 +177,11 @@ pcb *peek_node(pcb_queue *queue, int mode) {
 		pcb_node *cur;
 		
 		for (cur = queue->head; cur != NULL; cur = cur->next) {
-			printf("%d ", cur->item->next_burst_len);
-			printf("%d ", rv->next_burst_len);
 			if (cur->item->next_burst_len < rv->next_burst_len) {
 				rv = cur->item;
 			}
+			printf("%d ", cur->item->next_burst_len);
+			printf("%d\n", rv->next_burst_len);
 		}
 		
 		//printf("dequeue_node() -> %d\n", rv->p_id);

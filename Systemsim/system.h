@@ -16,7 +16,7 @@ typedef struct cpu {
 
 void cpu_init(cpu **sim_cpu, int alg) {
 	*sim_cpu = malloc(sizeof(cpu));
-	ready_queue_init(&((*sim_cpu)->rq), alg);
+	ready_queue_init(&((*sim_cpu)->rq), alg); 
 	(*sim_cpu)->cur = NULL;
 }
 
