@@ -213,9 +213,10 @@ static void *cpu_scheduler(void *args) {
 			}
 			// wake up all processes (including selected) with broadcast
 			//should_schedule = 0;
-			should_schedule = 0;
+			
 			pthread_cond_broadcast(&(sim_cpu->rq->cv));
 		}
+		should_schedule = 0;
 		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
 		
 		

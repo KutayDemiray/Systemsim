@@ -159,10 +159,8 @@ static void *process_th(void *args) {
 			pcb->total_time += pcb->remaining_burst_len;
 			pcb->remaining_burst_len = 0;
 			pcb->bursts_completed++;
-			//pcb->state = PCB_READY;
+			pcb->state = PCB_WAITING;
 		}
-		
-		
 		
 		// deal with i/o if needed
 		if (p > cl->p0 && pcb->remaining_burst_len == 0) {
@@ -254,7 +252,7 @@ static void *process_th(void *args) {
 		}
 		
 		pcb->state = PCB_READY;
-		if (p > cl->p0) 
+		if (p > cl->p0 && cl->outmode >= OUTMODE_VERBOSE) 
 			printf("==============================\n");
 		pthread_mutex_unlock(mutex_sim);
 	} while (p > cl->p0 || pcb->remaining_burst_len > 0);
