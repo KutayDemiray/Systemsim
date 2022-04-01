@@ -54,17 +54,22 @@ static void *process_th(void *args) {
 		// wait until cpu scheduler wakes processes up
 		// cpu scheduler wakes up all processes when it picks one to run
 		// so all processes should check whether they're the running process or not when they are awake
-		while (cpu->cur != NULL && cpu->cur->p_id != pcb->p_id) {
+		//while (cpu->cur != NULL && cpu->cur->p_id != pcb->p_id) {
+		while (pcb->state != PCB_RUNNING) {
 			pthread_cond_wait(&cv_rq, mutex_sim);
 		}
 		
+		dequeue(cpu->rq);
 		// determine whether the process will i/o with a device or terminate after this burst
 		int tmp = rand();
 		p = ((double) (tmp % 1000)) / 1000.0;
 		
+		/*
 		if (p < cl->p0) {// terminate
+			pthread_mutex_unlock(mutex_sim);
 			break;
 		}
+		*/
 		
 		// determine next cpu burst length
 		int burstwidth = cl->max_burst - cl->min_burst;
@@ -121,10 +126,10 @@ static void *process_th(void *args) {
 		}
 		else {
 			pcb->state = PCB_RUNNING;
-			
 			//pthread_mutex_unlock(mutex_sim);
 			usleep(pcb->remaining_burst_len * 1000);
 			//pthread_mutex_lock(mutex_sim);
+			
 			cpu->cur = NULL;
 			pcb->total_time += pcb->remaining_burst_len;
 			pcb->remaining_burst_len = 0;

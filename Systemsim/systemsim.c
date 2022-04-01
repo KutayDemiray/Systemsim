@@ -105,10 +105,11 @@ static void *process_generator(void *args) {
 		// sleep for 5 ms
 		usleep(5000);
 		// generate process
+		pthread_mutex_lock(&mutex_sim);
 		if (total < cl->all_p && (double) rand() / (double) RAND_MAX < cl->pg) {
 			// 1. wait until less than max_p processes exist in the system
 			sem_wait(sem_emptyprocs);
-			pthread_mutex_lock(&mutex_sim);
+			
 			
 			// 2. create PCB for new process
 			gettimeofday(&now, NULL);
@@ -133,10 +134,10 @@ static void *process_generator(void *args) {
 			// 5. alert scheduler (case 5)
 			pthread_cond_signal(&cv_sch);
 
-			pthread_mutex_unlock(&mutex_sim);
+			
 			//sem_post(sem_fullprocs);
 		}
-		
+		pthread_mutex_unlock(&mutex_sim);
 		//sem_getvalue(sem_fullprocs, &cur);
 	}
 	pthread_mutex_unlock(&mutex_sim);
@@ -184,7 +185,9 @@ static void *cpu_scheduler(void *args) {
 		// if so, select process from ready queue
 		if (sim_cpu->rq->length > 0) {
 			
-			sim_cpu->cur = dequeue(sim_cpu->rq);
+			//sim_cpu->cur = dequeue(sim_cpu->rq);
+			sim_cpu->cur = sim_cpu->rq->queue.head->item;
+			sim_cpu->cur->state = PCB_RUNNING;
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("scheduler runs %d\n", sim_cpu->cur->p_id);
 			}
@@ -194,7 +197,7 @@ static void *cpu_scheduler(void *args) {
 		// TODO all processes check whether they're selected. if not, sleep again (this part can be done in the process instead of here)
 		
 		// selected thread enters the cpu (TODO maybe already done above?)
-		should_schedule--;
+		should_schedule = 0;
 		pthread_mutex_unlock(&mutex_sim);
 	}
 	
