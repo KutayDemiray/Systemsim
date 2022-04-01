@@ -27,6 +27,8 @@ typedef struct {
 	sem_t *emptyprocs;
 } process_arg;
 
+int totalreturns = 0;
+
 // simulated process as a thread (there may be many) TODO work in progress
 static void *process_th(void *args) {
 	// read args
@@ -84,15 +86,17 @@ static void *process_th(void *args) {
 		// "do" the burst by sleeping
 		if (cl->alg == ALG_RR && cl->q < pcb->remaining_burst_len) {
 			pcb->state = PCB_RUNNING;
+			//dequeue(cpu->rq);
 			usleep(cl->q * 1000);
 			pcb->remaining_burst_len -= cl->q;
 			pcb->total_time += cl->q;
 			pcb->state = PCB_READY;
+			enqueue(cpu->rq, pcb);
 			
 			if (cl->outmode == 2){
 				struct timeval now;
 				gettimeofday(&now, NULL);
-				long int dif =  (now.tv_sec - start_time.tv_sec) / 1000 + (1000) * (now.tv_usec - start_time.tv_usec);  
+				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
 				printf("%ld\t%d\t", dif, pcb->p_id);
 				switch (pcb->state) {
 					case PCB_RUNNING: printf("RUNNING\n"); break;
@@ -138,13 +142,15 @@ static void *process_th(void *args) {
 				if (cl->outmode >= OUTMODE_VERBOSE) {
 					struct timeval now;
 					gettimeofday(&now, NULL);
-					long int dif =  (now.tv_sec - start_time.tv_sec) / 1000 + (1000) * (now.tv_usec - start_time.tv_usec); 
+					long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
 					printf("%ld\t", dif);
 					printf("%d\t", pcb->p_id);
-					printf("USING DEVICE %d\n", device_no);
+					printf("Process %d using device %d\n", pcb->p_id, device_no);
 				}
-
+				
+				//pthread_mutex_unlock(mutex_sim);
 				usleep(duration * 1000);
+				//pthread_mutex_lock(mutex_sim);
 				
 				dev->cur = NULL;
 				dev->count--;
@@ -165,7 +171,7 @@ static void *process_th(void *args) {
 	pthread_mutex_lock(mutex_sim);
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
 	if (cl->outmode >= OUTMODE_VERBOSE) {
-		printf("PROCESS %d TERMINATED\n", pcb->p_id);
+		printf("Process %d terminated (total returns: %d)\n", pcb->p_id, ++totalreturns);
 	}
 	return_pid(((process_arg *) args)->pid_list, pcb->p_id);
 	sem_post(((process_arg *) args)->emptyprocs);

@@ -184,7 +184,7 @@ int pick_pid(pid_list **list) {
 	while (cur != NULL) {
 		if (cur->used == 0) {
 			cur->used = 1;
-			printf("picked %d\n", cur->pid);
+			//printf("picked %d\n", cur->pid);
 			return cur->pid;
 		}
 		cur = cur->next;
