@@ -51,7 +51,6 @@ static void *process_generator(void *args) {
 	
 	struct timeval now; // for time calculations
 	// argumental variables for process creations
-	pthread_t tid;
 	
 	pcb *newpcb;
 	// initial generation loop
@@ -64,7 +63,7 @@ static void *process_generator(void *args) {
 		// 2. create PCB for new process
 		gettimeofday(&now, NULL);
 		long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
-		newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
+		newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif, cl->burst_dist, cl->burst_len, cl->min_burst, cl->max_burst); // TODO set other attributes (tid etc)
 		//newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
 		
 		// 3. add new process to ready queue
@@ -119,7 +118,7 @@ static void *process_generator(void *args) {
 			// 2. create PCB for new process
 			gettimeofday(&now, NULL);
 			long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
-			newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif); // TODO set other attributes (tid etc)
+			newpcb = pcb_create(pick_pid(&pids), PCB_READY, dif, cl->burst_dist, cl->burst_len, cl->min_burst, cl->max_burst); // TODO set other attributes (tid etc)
 			//newpcb = pcb_create(total + 1, PCB_READY, dif); // TODO set other attributes (tid etc)
 			total++;
 			// 3. add new process to ready queue
@@ -198,10 +197,9 @@ static void *cpu_scheduler(void *args) {
 		// TODO check if scheduling needed 
 		
 		// if so, select process from ready queue
-		if (sim_cpu->rq->length > 0) {
-			
+		if (sim_cpu->rq->length > 0) {	
 			//sim_cpu->cur = dequeue(sim_cpu->rq);
-			sim_cpu->cur = sim_cpu->rq->queue->tail->item;
+			sim_cpu->cur = peek(sim_cpu->rq);
 			sim_cpu->cur->state = PCB_RUNNING;
 			if (cl->outmode >= OUTMODE_VERBOSE) {
 				printf("Scheduler runs %d (current: %d)\n", sim_cpu->cur->p_id, sim_cpu->rq->length);

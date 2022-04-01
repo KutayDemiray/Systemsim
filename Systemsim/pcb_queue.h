@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <math.h>
 #include "cl_args.h"
 
 // process state enum
@@ -32,11 +33,32 @@ typedef struct pcb {
 	int total_time;
 } pcb;
 
-pcb *pcb_create(int p_id, int state, int start_time) {
+pcb *pcb_create(int p_id, int state, int start_time, int burst_dist, int burst_len, int min_burst, int max_burst) {
 	pcb *newpcb = malloc(sizeof(pcb));
 	newpcb->p_id = p_id;
 	newpcb->state = state;
-	newpcb->remaining_burst_len = 0;
+	
+	// determine next cpu burst length
+	double u, next;
+	if (burst_dist == UNIFORM) {
+		u = ((double) (rand() % 1000)) / 1000.0;
+		next = min_burst + (int) ((max_burst - min_burst) * u);
+	}
+	else if (burst_dist == EXPONENTIAL) { // exponential distribution
+		// algorithm below is taken from prof. korpeoglu's forum post
+		// exponential distribution with lambda = 1/burst_len
+		do {
+			u = ((double) (rand() % 1000)) / 1000.0;
+			next = (int) ((-1) * log(u) * burst_len);
+		} while (next < min_burst || next > max_burst);
+	}
+	else if (burst_dist == FIXED) { // fixed
+		next = burst_len;
+	}
+
+	newpcb->next_burst_len = next;
+	newpcb->remaining_burst_len = next; 
+	
 	newpcb->bursts_completed = 0;
 	newpcb->start_time = start_time;
 	newpcb->finish_time = -1;
@@ -82,10 +104,10 @@ void enqueue_node(pcb_queue **queue, pcb *item) {
 }
 
 pcb *dequeue_node(pcb_queue **queue, int mode) {
-	/*if ((*queue)->head == NULL || (*queue)->tail == NULL) {
+	if ((*queue)->head == NULL || (*queue)->tail == NULL) {
 		return NULL;
 	}
-	else */if (mode == MODE_FIFO) {
+	else if (mode == MODE_FIFO) {
 		pcb *rv = (*queue)->tail->item;
 		pcb_node *tmp = (*queue)->tail; 
 		(*queue)->tail = (*queue)->tail->prev;
@@ -96,22 +118,61 @@ pcb *dequeue_node(pcb_queue **queue, int mode) {
 			(*queue)->head = NULL;
 		}
 		free(tmp);
-		printf("dequeue_node() -> %d done\n", rv->p_id);
+		//printf("dequeue_node() -> %d done\n", rv->p_id);
 		return rv;
 	}
 	else if (mode == MODE_PRIO) {
 		pcb *rv = (*queue)->head->item;
-		pcb_node *cur, *tmp;
+		pcb_node *cur;
+		pcb_node *tmp = NULL;
 		
-		for (cur = (*queue)->head; cur != NULL; cur = tmp->next) {
+		for (cur = (*queue)->head; cur != NULL; cur = cur->next) {
 			if (cur->item->next_burst_len < rv->next_burst_len) {
 				tmp = cur;
 				rv = cur->item;
 			}
 		}
 		
+		if (tmp != NULL && tmp->prev != NULL) {
+			tmp->prev->next = tmp->next;
+		}
+		if (tmp != NULL && tmp->next != NULL) {
+			tmp->next->prev = tmp->prev;
+		}
+		
 		free(tmp);
-		printf("dequeue_node() -> %d\n", rv->p_id);
+		//printf("dequeue_node() -> %d\n", rv->p_id);
+		return rv;
+	}
+	else {
+		return NULL;
+	}
+}
+
+pcb *peek_node(pcb_queue *queue, int mode) {
+	if (queue->head == NULL || queue->tail == NULL) {
+		return NULL;
+	}
+	else if (mode == MODE_FIFO) {
+		pcb *rv = queue->tail->item;
+		//printf("dequeue_node() -> %d done\n", rv->p_id);
+		return rv;
+	}
+	else if (mode == MODE_PRIO) {
+		
+		pcb *rv = queue->head->item;
+		//printf("===========================================================%d %d\n", queue->head->item->p_id, rv->next_burst_len);
+		pcb_node *cur;
+		
+		for (cur = queue->head; cur != NULL; cur = cur->next) {
+			printf("%d ", cur->item->next_burst_len);
+			printf("%d ", rv->next_burst_len);
+			if (cur->item->next_burst_len < rv->next_burst_len) {
+				rv = cur->item;
+			}
+		}
+		
+		//printf("dequeue_node() -> %d\n", rv->p_id);
 		return rv;
 	}
 	else {
@@ -174,6 +235,9 @@ pcb *dequeue(ready_queue *rq) {
 	return dequeue_node(&(rq->queue), rq->mode);
 }
 
+pcb *peek(ready_queue *rq) {
+	return peek_node(rq->queue, rq->mode);
+}
 // simple linked list of pid's and their states
 typedef struct pid_list {
 	int pid;
