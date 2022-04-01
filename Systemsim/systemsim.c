@@ -279,12 +279,12 @@ void sim_begin() {
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("sim_begin() start\n");
 	}
-	
+	gettimeofday(&start_time, NULL);
 	// simulator threads
 	pthread_create(&pgen, NULL, process_generator, NULL);
 	pthread_create(&sched, NULL, cpu_scheduler, NULL);
 	
-	gettimeofday(&start_time, NULL);
+	
 	
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("sim_begin() end\n");
