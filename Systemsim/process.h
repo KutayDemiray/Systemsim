@@ -24,89 +24,114 @@ typedef struct {
 	pthread_mutex_t *mutex_sim; // shared
 	pid_list **pid_list; // shared
 	struct timeval start_time;
-	sem_t *emptyprocs;
+	//sem_t *emptyprocs;
 	int *should_schedule;
+	int *cur;
+	int *total;
 } process_arg;
-
+pcb* ret;
 int totalreturns = 0;
 
-// simulated process as a thread (there may be many) TODO work in progress
+// simulated process as a thread (there may be many)
 static void *process_th(void *args) {
 	// read args
+	pthread_mutex_t *mutex_sim = ((process_arg *) args)->mutex_sim;
 	cpu *cpu = ((process_arg *) args)->cpu;
 	io_device *dev1 = ((process_arg *) args)->dev1;
 	io_device *dev2 = ((process_arg *) args)->dev2;
-	pcb *pcb = ((process_arg *) args)->pcb;
-	pthread_cond_t *cv_sch = ((process_arg *) args)->cv_sch;
-	pthread_cond_t cv_rq = ((process_arg *) args)->cpu->rq->cv;
-	pthread_mutex_t *mutex_sim = ((process_arg *) args)->mutex_sim;
-	cl_args* cl = ((process_arg *) args)->cl;
+	pid_list **pids = ((process_arg *) args)->pid_list; 
 	struct timeval start_time = ((process_arg *) args)->start_time;
+	int *cur = ((process_arg *) args)->cur; 
+	//int *total = ((process_arg *) args)->total; 
+	pcb *pcb = ((process_arg *) args)->pcb;
+	//(*cur)++;
+	
+	/*
+	struct timeval now;	
+	gettimeofday(&now, NULL);
+	long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+	pcb *pcb = pcb_create((*total)++, PCB_READY, dif);
+	*/
+	pthread_cond_t *cv_sch = ((process_arg *) args)->cv_sch;
+	//pthread_cond_t cv_rq = ((process_arg *) args)->cpu->rq->cv;
+	
+	cl_args* cl = ((process_arg *) args)->cl;
+	//struct timeval start_time = ((process_arg *) args)->start_time;
 	int *should_schedule = ((process_arg *) args)->should_schedule;
 	
-	time_t t;
-	srand((unsigned) time(&t));
+	//time_t t;
+	//srand((unsigned) time(&t));
 	
 	double p;
+	
+	pthread_mutex_lock(mutex_sim);
+	pcb->state = PCB_READY;
+	enqueue(cpu->rq, pcb);
+	*should_schedule = 1; // case 5
+	pthread_cond_signal(cv_sch);
+	pthread_mutex_unlock(mutex_sim);
+	
+	if (cl->outmode >= OUTMODE_VERBOSE) {
+		printf("Process %d begins\n", pcb->p_id);
+	}
+	
 	do {
 		pthread_mutex_lock(mutex_sim);
+		
+		// 1. check if this process is the one selected by the scheduler 
 		
 		// wait until cpu scheduler wakes processes up
 		// cpu scheduler wakes up all processes when it picks one to run
 		// so all processes should check whether they're the running process or not when they are awake
-		while (cpu->cur != NULL && cpu->cur->p_id != pcb->p_id) {
-			pthread_cond_wait(&cv_rq, mutex_sim);
+		//while (cpu->cur != NULL && cpu->cur->p_id != pcb->p_id) {
+		while (pcb->state != PCB_RUNNING) {
+			pthread_cond_wait(&(cpu->rq->cv), mutex_sim);
 		}
+		dequeue(cpu->rq);
+		
+		// 2. calculate next burst length if necessary
 		
 		// determine whether the process will i/o with a device or terminate after this burst
 		int tmp = rand();
 		p = ((double) (tmp % 1000)) / 1000.0;
-		
-		if (p < cl->p0) {// terminate
-			break;
+		if (cl->outmode >= OUTMODE_VERBOSE) {
+			printf("p: %f\n", p);
 		}
 		
-		// determine next cpu burst length
-		int burstwidth = cl->max_burst - cl->min_burst;
-		if (pcb->remaining_burst_len == 0 && cl->burst_dist != FIXED) {
-			double u, next;
-			if (cl->burst_dist == UNIFORM) {
-				u = ((double) (rand() % 1000)) / 1000.0;
-				next = (int) (burstwidth * u);
-			}
-			else if (cl->burst_dist == EXPONENTIAL) { // exponential distribution
-				// algorithm below is taken from prof. korpeoglu's forum post
-				// exponential distribution with lambda = 1/burst_len
-				do {
-					u = ((double) (rand() % 1000)) / 1000.0;
-					next = (int) ((-1) * log(u) * cl->burst_len);
-				} while (next < cl->min_burst || next > cl->max_burst);
-			}
-			else { // fixed
-				next = cl->burst_len;
-			}
-
-			pcb->next_burst_len = next;
-		} 
+		// 3. "do" the burst by sleeping
 		
-		// "do" the burst by sleeping
-		if (cl->alg == ALG_RR && cl->q < pcb->remaining_burst_len) {
-			pcb->state = PCB_RUNNING;
+		cpu->cur = pcb;
+		pcb->state = PCB_RUNNING;
+		if ((cl->alg == ALG_RR) && (cl->q < pcb->remaining_burst_len)) {
 			//dequeue(cpu->rq);
 			
-			//pthread_mutex_unlock(mutex_sim);
+			if (cl->outmode >= OUTMODE_VERBOSE) {
+				struct timeval now;
+				gettimeofday(&now, NULL);
+				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+				printf("%ld: RR Process %d bursts for %d ms\n", dif, pcb->p_id, cl->q);
+			}
+
+			pthread_mutex_unlock(mutex_sim);
 			usleep(cl->q * 1000);
-			//pthread_mutex_lock(mutex_sim);
+			pthread_mutex_lock(mutex_sim);
+			
 			cpu->cur = NULL;
 			pcb->remaining_burst_len -= cl->q;
 			pcb->total_time += cl->q;
 			pcb->state = PCB_READY;
+
 			enqueue(cpu->rq, pcb);
-			
-			if (cl->outmode == 2){
+			*should_schedule = 1;
+			pthread_cond_signal(cv_sch); // case 3
+
+			//pcb->bursts_completed ++;
+
+
+			if (cl->outmode >= OUTMODE_VERBOSE){
 				struct timeval now;
 				gettimeofday(&now, NULL);
-				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+				long int dif = (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
 				printf("%ld\t%d\t", dif, pcb->p_id);
 				switch (pcb->state) {
 					case PCB_RUNNING: printf("RUNNING\n"); break;
@@ -115,96 +140,142 @@ static void *process_th(void *args) {
 				}
 			}
 			
-			(*should_schedule)++;
-			pthread_cond_signal(cv_sch); // wake up scheduler (case 3)
 			// in this case, no i/o will happen. instead, the process will simply be added to the ready queue again
 		}
 		else {
-			pcb->state = PCB_RUNNING;
-			
 			//pthread_mutex_unlock(mutex_sim);
+			if (cl->outmode >= OUTMODE_VERBOSE) {
+				struct timeval now;
+				gettimeofday(&now, NULL);
+				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+				printf("%ld: Process %d bursts for %d ms\n", dif, pcb->p_id, pcb->remaining_burst_len);
+			}
+			
+			pthread_mutex_unlock(mutex_sim);
 			usleep(pcb->remaining_burst_len * 1000);
-			//pthread_mutex_lock(mutex_sim);
+			pthread_mutex_lock(mutex_sim);
+			
 			cpu->cur = NULL;
 			pcb->total_time += pcb->remaining_burst_len;
 			pcb->remaining_burst_len = 0;
-			pcb->state = PCB_READY;
-
-			// deal with i/o if needed
-			if (p > cl->p0) {
-				io_device *dev;
-				int duration;
-				int device_no = 0;
-				if (cl->p0 <= p && p < cl->p0 + cl->p1) { // i/o with device 1
-					dev = dev1;
-					duration = cl->t1;
-					device_no = 1;
-				}
-				else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
-					dev = dev2;
-					duration = cl->t2;
-					device_no = 2;
-				}
-				
-				pthread_mutex_unlock(mutex_sim);
-				pthread_mutex_lock(&(dev->mutex));
-				pcb->state = PCB_WAITING;
-				
-				dev->count++;
-				while (dev->cur != NULL && dev->cur->p_id != pcb->p_id) {
-					pthread_cond_wait(&(dev->cv), &(dev->mutex)); 
-				}
-				(*should_schedule)++;
-				pthread_cond_signal(cv_sch); // wake up scheduler (case 2)
-				
-				dev->cur = pcb;
-				
-				if (cl->outmode >= OUTMODE_VERBOSE) {
-					struct timeval now;
-					gettimeofday(&now, NULL);
-					long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
-					printf("%ld\t", dif);
-					printf("%d\t", pcb->p_id);
-					printf("Process %d using device %d\n", pcb->p_id, device_no);
-				}
-				
-				//pthread_mutex_unlock(mutex_sim);
-				usleep(duration * 1000);
-				//pthread_mutex_lock(mutex_sim);
-				
-				dev->cur = NULL;
-				dev->count--;
-				
-				pthread_cond_broadcast(&(dev->cv));
-				
-				pcb->state = PCB_READY;
-				enqueue(cpu->rq, pcb);
-				(*should_schedule)++;
-				pthread_cond_signal(cv_sch); // wake up scheduler (case 4)
-				/*
-				while (!(*should_schedule)) {
-					pthread_cond_wait(cv_proc);
-				}
-				*/
-				pthread_mutex_unlock(&(dev->mutex));
-				pthread_mutex_lock(mutex_sim);
-			}
-			
-			enqueue(cpu->rq, pcb);
+			pcb->bursts_completed++;
+			pcb->state = PCB_WAITING;
 		}
 		
+		// deal with i/o if needed
+		if (p > cl->p0 && pcb->remaining_burst_len == 0) {
+			pcb->state = PCB_WAITING;
+			io_device *dev;
+			int duration;
+			int device_no = 0;
+			if (cl->p0 <= p && p < cl->p0 + cl->p1) { // i/o with device 1
+				dev = dev1;
+				duration = cl->t1;
+				device_no = 1;
+				pcb->n1++;
+			}
+			else if (cl->p0 + cl->p1 <= p) { // i/o with device 2
+				dev = dev2;
+				duration = cl->t2;
+				device_no = 2;
+				pcb->n2++;
+			}
+			
+			pthread_mutex_unlock(mutex_sim);
+			pthread_mutex_lock(&(dev->mutex));
+			//while (dev->cur != NULL && dev->cur->p_id != pcb->p_id) {
+			while (dev->cur != NULL) {
+				pthread_cond_wait(&(dev->cv), &(dev->mutex)); 
+			}
+			dev->cur = pcb;
+			dev->count++;
+			
+			if (cl->outmode >= OUTMODE_VERBOSE) {
+				struct timeval now;
+				gettimeofday(&now, NULL);
+				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+				printf("%ld: Process %d using device %d\n", dif, pcb->p_id, device_no);
+			}
+			
+			*should_schedule = 1;
+			pthread_cond_signal(cv_sch); // wake up scheduler (case 2)
+			pthread_mutex_unlock(&(dev->mutex));
+			usleep(duration * 1000);
+			pthread_mutex_lock(&(dev->mutex));
+			
+			if (cl->outmode >= OUTMODE_VERBOSE) {
+				struct timeval now;
+				gettimeofday(&now, NULL);
+				long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+				printf("%ld: Process %d finished using device %d\n", dif, pcb->p_id, device_no);
+			}
+			dev->cur = NULL;
+			dev->count--;
+			
+			// determine next cpu burst length
+			int burstwidth = cl->max_burst - cl->min_burst;
+			if (p > cl->p0 && pcb->remaining_burst_len == 0) {
+				double u, next;
+				if (cl->burst_dist == UNIFORM) {
+					u = ((double) (rand() % 1000)) / 1000.0;
+					next = cl->min_burst + (int) (burstwidth * u);
+				}
+				else if (cl->burst_dist == EXPONENTIAL) { // exponential distribution
+					// algorithm below is taken from prof. korpeoglu's forum post
+					// exponential distribution with lambda = 1/burst_len
+					do {
+						u = ((double) (rand() % 1000)) / 1000.0;
+						next = (int) ((-1) * log(u) * cl->burst_len);
+					} while (next < cl->min_burst || next > cl->max_burst);
+				}
+				else if (cl->burst_dist == FIXED) { // fixed
+					next = cl->burst_len;
+				}
+
+				pcb->next_burst_len = next;
+				pcb->remaining_burst_len = next;
+			}
+			
+			//(*should_schedule) = 1;
+			pthread_cond_broadcast(&(dev->cv));
+			pthread_mutex_unlock(&(dev->mutex));
+			
+			pthread_mutex_lock(mutex_sim);
+			pcb->state = PCB_READY;
+			enqueue(cpu->rq, pcb);
+			(*should_schedule) = 1;
+			pthread_cond_signal(cv_sch); // wake up scheduler (case 4)
+		}
+		
+		if (p > cl->p0 || pcb->remaining_burst_len > 0) {
+			
+		}
+		
+		pcb->state = PCB_READY;
+		if (p > cl->p0 && cl->outmode >= OUTMODE_VERBOSE) 
+			printf("==============================\n");
 		pthread_mutex_unlock(mutex_sim);
-	} while (p > cl->p0);
+	} while (p > cl->p0 || pcb->remaining_burst_len > 0);
 	
 	pthread_mutex_lock(mutex_sim);
-	//(*should_schedule) = 1;
+	(*should_schedule) = 1;
 	pthread_cond_signal(cv_sch); // wake up scheduler (case 1)
 	if (cl->outmode >= OUTMODE_VERBOSE) {
 		printf("Process %d terminated (total returns: %d)\n", pcb->p_id, ++totalreturns);
+		printf("==============================\n");
 	}
-	return_pid(((process_arg *) args)->pid_list, pcb->p_id);
+	(*cur)--;
+	return_pid(pids, pcb->p_id);
 	//sem_post(((process_arg *) args)->emptyprocs);
 	pthread_mutex_unlock(mutex_sim);
+	
+	// frees
+	free(args);
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	long int dif =  (now.tv_sec - start_time.tv_sec) * (1000) + (now.tv_usec - start_time.tv_usec) / (1000); 
+	pcb->finish_time = dif;
+	pthread_exit(pcb);
 	
 	pthread_exit(NULL);
 }
